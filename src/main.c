@@ -13,7 +13,9 @@
 #endif
 
 #include "id.h"
+#ifndef LINUX
 #include <io.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #define WIN32_LEAN_AND_MEAN
@@ -103,6 +105,38 @@ static const WNDPROC tab_wndproc[NUM_TABS] = {
 
 static char filename[MAX_PATH];
 static OPENFILENAME ofn;
+
+#ifdef LINUX
+// Convert Wine paths to native Linux paths
+static const char *convert_wine_path(const char *wine_path) {
+	static char native_path[MAX_PATH];
+	
+	if (!wine_path) return wine_path;
+	
+	// Check if it's a Z: path (Wine symlink to Linux root)
+	if (wine_path[0] && wine_path[1] == ':') {
+		if (wine_path[0] == 'Z' || wine_path[0] == 'z') {
+			// Z:\ maps to /, skip the Z:\ part
+			const char *rest = wine_path + 2;
+			if (*rest == '\\' || *rest == '/') rest++;
+			snprintf(native_path, sizeof(native_path), "/%s", rest);
+			// Convert backslashes to forward slashes
+			for (char *p = native_path; *p; p++) {
+				if (*p == '\\') *p = '/';
+			}
+			return native_path;
+		}
+	}
+	
+	// For other paths, just convert backslashes to forward slashes
+	snprintf(native_path, sizeof(native_path), "%s", wine_path);
+	for (char *p = native_path; *p; p++) {
+		if (*p == '\\') *p = '/';
+	}
+	return native_path;
+}
+#endif
+
 char *open_dialog(BOOL (WINAPI *func)(LPOPENFILENAME),
 	char *filter, char *extension, char *file, DWORD flags)
 {
@@ -118,7 +152,14 @@ char *open_dialog(BOOL (WINAPI *func)(LPOPENFILENAME),
 	ofn.lpstrFile = filename;			// must be a buffer, not a const string
 	ofn.nMaxFile = sizeof(filename) / sizeof(*filename);
 	ofn.Flags = flags | OFN_NOCHANGEDIR;
-	return func(&ofn) ? filename : NULL;
+	BOOL result = func(&ofn);
+#ifdef LINUX
+	if (result) {
+		const char *converted = convert_wine_path(filename);
+		strcpy(filename, converted);
+	}
+#endif
+	return result ? filename : NULL;
 }
 
 BOOL get_original_rom() {
@@ -999,6 +1040,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	InitCommonControls();
 
 	#ifdef DEBUG
+	#ifndef LINUX
 		// opens a command line window
 		int hConHandle;
 		long lStdHandle;
@@ -1013,6 +1055,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		setvbuf(stdout, NULL, _IONBF, 0);
 
 		printf("Debug output\n");
+	#endif
 	#endif
 
 //	SetUnhandledExceptionFilter(exfilter);

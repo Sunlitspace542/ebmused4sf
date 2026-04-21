@@ -1,10 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "ebmusv2.h"
 #include "misc.h"
 #include "id.h"
+
+#ifdef LINUX
+#define strlwr strlwr_nix
+static char *strlwr_nix(char *str) {
+    for (char *p = str; *p; p++) *p = tolower(*p);
+    return str;
+}
+#endif
 
 #define IDC_ROM_FILE 17
 #define IDC_ORIG_ROM_FILE 18

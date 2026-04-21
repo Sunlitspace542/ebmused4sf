@@ -4,6 +4,8 @@ The exported SONG_DATA files must then be compiled with asar scripts into SGSOUN
 
 Thank you to all of the contributors of Earthbound Music Editor, you have enabled us to make custom Star Fox music!
 
+To compile on Linux you need Wine and `wine64-tools` installed.
+
 ## Original README
 ## EarthBound Music Editor
 EBMusEd is a ROM hacking tool for editing and playing back EarthBound's N-SPC sequence data.

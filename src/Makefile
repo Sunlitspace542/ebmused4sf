@@ -11,11 +11,18 @@ O = $(SRCS:%.c=%.o)
 RELEASE_O = $(addprefix $(RELEASE_O_DIR)/, $O)
 DEBUG_O = $(addprefix $(DEBUG_O_DIR)/, $O)
 
+OS := $(shell uname -s)
+ifeq ($(OS),Linux)
+CC = winegcc -W -Wall -Werror=vla -std=gnu99 -fno-exceptions -DLINUX
+RC = wrc
+else
 CC = gcc -W -Wall -Werror=vla -std=gnu99 -fno-exceptions
+RC = windres
+endif
 
 RELEASE_FLAGS = -DNDEBUG -Os
 DEBUG_FLAGS = -Og -g -DDEBUG
-LINK_FLAGS = -lcomctl32 -lcomdlg32 -lgdi32 -lwinmm
+LINK_FLAGS = -lcomctl32 -lcomdlg32 -lgdi32 -lwinmm -lshell32
 
 release: $(RELEASE_DIR)/ebmused4sf.exe
 debug: $(DEBUG_DIR)/ebmused4sf.exe
@@ -33,11 +40,11 @@ $(DEBUG_O_DIR)/%.o: %.c | $(DEBUG_O_DIR)
 	$(CC) $(DEBUG_FLAGS) -c $< -o $@
 
 %/$(OBJ_DIR)/resource.o: resource.rc
-	windres $< -o $@
+	$(RC) $< -o $@
 
 %/$(OBJ_DIR):
-	mkdir $(subst /,\,$(BUILD_DIR))
-	mkdir $(subst /,\,$(DEBUG_DIR))
-	mkdir $(subst /,\,$(DEBUG_O_DIR))
-	mkdir $(subst /,\,$(RELEASE_DIR))
-	mkdir $(subst /,\,$(RELEASE_O_DIR))
+	mkdir -p $(BUILD_DIR)
+	mkdir -p $(DEBUG_DIR)
+	mkdir -p $(DEBUG_O_DIR)
+	mkdir -p $(RELEASE_DIR)
+	mkdir -p $(RELEASE_O_DIR)

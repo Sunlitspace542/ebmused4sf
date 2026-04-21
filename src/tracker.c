@@ -35,7 +35,7 @@ static const struct control_desc editor_controls[] = {
 // Upper
 	{ "Static",          10, 13, 35, 20, "Order:", 0, 0 }, // "Order" label
 	{ "ebmused_order",   50, 10,-420,20, NULL, IDC_ORDER, WS_BORDER }, // Pattern order list
-	{ "Static",        -363, 13, 60, 20, "Loop Count:", IDC_REP_CAPTION, 0 },
+	{ "Static",        -363, 13, 65, 20, "Loop Count:", IDC_REP_CAPTION, 0 },
 	{ "Edit",          -303, 10, 30, 20, NULL, IDC_REPEAT, WS_BORDER | ES_NUMBER }, // Loop textbox
 	{ "Static",        -268, 13, 45, 20, "Loop To:", IDC_REP_POS_CAPTION, 0 },
 	{ "Edit",          -223, 10, 30, 20, NULL, IDC_REPEAT_POS, WS_BORDER | ES_NUMBER }, // Loop position textbox

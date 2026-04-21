@@ -1,6 +1,9 @@
 #ifndef EBMUSV2_H
 #define EBMUSV2_H
 
+#ifdef LINUX
+#include <errno.h>
+#endif
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "structs.h"
