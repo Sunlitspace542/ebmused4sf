@@ -639,47 +639,33 @@ static void write_spc(FILE *f) {
 		};
 
 		// Move the music from wherever it was in the spc to 0x3200... (ripping out part of the program block in the process...)
-		//const WORD dstMusic = 0x3100;
-		//#define HARD_CODED_DST 0xF8FE
-		#define HARD_CODED_DST 0xF8FE
-		WORD dstMusic = HARD_CODED_DST;
+		const WORD dstMusic = 0x3100;
 		const int music_size = compile_song(&cur_song);
 		memcpy(&spc[SPC_HEADER_SIZE + dstMusic], &spc_copy[cur_song.address], music_size);
 
 		// recompile so the addresses are correct...
 		cur_song.address = dstMusic;
 		compile_song(&cur_song);
-		printf("Recompiled to 0x%X\n", cur_song.address);
-
-		dstMusic = 0x3100;
 
 		// Size of the instruments table
 		const WORD inst_size = NUM_INSTRUMENTS*6;
-	
 		// Calculate buffer size needed for sample pointer table to round to nearest 0x100.
 		const WORD REMAINDER = 0x100 - ((dstMusic + music_size) & 0xFF);
 		const WORD dstSamplePointers = dstMusic + music_size + REMAINDER;
-
-		//const WORD dstInstruments = dstSamplePointers + 0x4*NUM_INSTRUMENTS + BUFFER;
-		// where to write instrument table
-		const WORD dstInstruments = 0x3D00;
-
-		//const WORD dstSamples = dstInstruments + inst_size + BUFFER;
-		const WORD dstSamples = 0x4000;
+		const WORD dstInstruments = dstSamplePointers + 0x4*NUM_INSTRUMENTS + BUFFER;
+		const WORD dstSamples = dstInstruments + inst_size + BUFFER;
 
 		// Blank out some space (for the buffer spaces)
 		memset(&new_spc[SPC_HEADER_SIZE + dstMusic], 0, dstSamples - dstMusic);
 
-		dstMusic = HARD_CODED_DST;
 		// Copy music data...
-		printf("Packing music data to $%X\n", cur_song.address);
-		//memcpy(&new_spc[SPC_HEADER_SIZE + dstMusic], &spc[cur_song.address], music_size);
+		printf("Packing music data to $%x\n", cur_song.address);
 		memcpy(&new_spc[SPC_HEADER_SIZE + dstMusic], &spc[cur_song.address], music_size);
 		// Use the copy we made to restore the working spc to before compile_song borked it with the dstMusic address...
 		memcpy(spc, spc_copy, 0x10000);
 
 		// Copy instrument data...
-		printf("Packing instrument table to $%X\n", dstInstruments);
+		printf("Packing instrument table to $%x\n", dstInstruments);
 		memcpy(&new_spc[SPC_HEADER_SIZE + dstInstruments], &spc_copy[inst_base], inst_size);
 
 		// Copy sample data and pointers...
@@ -728,7 +714,6 @@ static void write_spc(FILE *f) {
 			memcpy(&new_spc[SPC_HEADER_SIZE + dstSamplePointers + 0x4*i + 0x2], &loop_addr, 2);
 		}
 
-		//dstMusic = 0xE600;
 		// We're done copying the important stuff, now we just need to adjust some pointers in the music program.
 		{
 			// Set pattern repeat location
