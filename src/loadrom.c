@@ -4,11 +4,13 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "ebmusv2.h"
+#include "misc.h"
 #include "id.h"
 
 FILE *rom;
 int rom_size;
 int rom_offset;
+int song_pointer_table_offset;
 char *rom_filename;
 
 unsigned char pack_used[NUM_SONGS][3];
@@ -87,7 +89,7 @@ BOOL close_rom() {
 	// This protects from crashes if an SPC was playing.
 	free_samples();
 	free_song(&cur_song);
-	song_playing = FALSE;
+	stop_playing();
 	initialize_state();
 
 	memset(packs_loaded, 0xFF, 3);
@@ -137,9 +139,7 @@ BOOL open_rom(char *filename, BOOL readonly) {
 		rom_packs[i].start_address = addr;
 	}
 
-	fseek(f, SONG_POINTER_TABLE + rom_offset, SEEK_SET);
-	fread(song_address, NUM_SONGS, 2, f);
-
+	song_pointer_table_offset = 0;
 	init_crc();
 	for (int i = 0; i < NUM_PACKS; i++) {
 		int size;
@@ -167,12 +167,10 @@ BOOL open_rom(char *filename, BOOL readonly) {
 			blocks[count-1].size = size;
 			blocks[count-1].spc_address = spc_addr;
 
-/*			if (spc_addr == 0x0500) {
+			if (spc_addr == 0x0500) {
 				int back = ftell(f);
-				fseek(f, 0x2E4A - 0x500, SEEK_CUR);
-				fread(song_address, NUM_SONGS, 2, f);
-				fseek(f, back, SEEK_SET);
-			}*/
+				song_pointer_table_offset = back + 0x2E4A - 0x500;
+			}
 
 			fread(&spc[spc_addr], size, 1, f);
 			crc = update_crc(crc, (BYTE *)&size, 2);
@@ -189,5 +187,13 @@ bad_pointer:
 		inmem_packs[i].status = 0;
 	}
 	load_metadata();
+	if (song_pointer_table_offset) {
+		fseek(f, song_pointer_table_offset, SEEK_SET);
+		fread(song_address, NUM_SONGS, 2, f);
+	} else {
+		close_rom();
+		MessageBox2("Unable to determine location of song pointer table.", "Can't open file", MB_ICONEXCLAMATION);
+		return FALSE;
+	}
 	return TRUE;
 }

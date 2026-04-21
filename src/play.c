@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "ebmusv2.h"
+#include "id.h"
 
 BYTE spc[65536];
 int inst_base = 0x6E00;
@@ -32,7 +33,7 @@ static int calc_vol_3(struct channel_state *c, int pan, int flag) {
 	static const BYTE pan_table[] = {
 		0x00, 0x01, 0x03, 0x07, 0x0D, 0x15, 0x1E, 0x29,
 		0x34, 0x42, 0x51, 0x5E, 0x67, 0x6E, 0x73, 0x77,
-		0x7A, 0x7C, 0x7D, 0x7E, 0x7F
+		0x7A, 0x7C, 0x7D, 0x7E, 0x7F, 0xAA
 	};
 	const BYTE *ph = &pan_table[pan >> 8];
 	int v = ph[0] + ((ph[1] - ph[0]) * (pan & 255) >> 8);
@@ -62,36 +63,39 @@ static void slide(struct slider *s) {
 }
 
 void set_inst(struct song_state *st, struct channel_state *c, int inst) {
+	static const short rates[32] = {
+		  0, 2048, 1536, 1280, 1024, 768, 640, 512,
+		384,  320,  256,  192,  160, 128,  96,  80,
+		 64,   48,   40,   32,   24,  20,  16,  12,
+		 10,    8,    6,    5,    4,   3,   2,   1
+	};
 	// CA and up is for instruments in the second pack (set with FA xx)
 	if (inst >= 0x80)
 		inst += st->first_CA_inst - 0xCA;
 
 	BYTE *idata = &spc[inst_base + 6*inst];
-	if (inst < 0 || inst >= 64 || !samp[idata[0]].data ||
+	if (inst < 0 || inst >= MAX_INSTRUMENTS || !samp[idata[0]].data ||
 		(idata[4] == 0 && idata[5] == 0))
 	{
-		printf("ch %d: bad inst %X\n", c - st->chan, inst);
+		printf("ch %d: bad inst %X\n", (int)(c - st->chan), inst);
 		return;
 	}
 
 	c->inst = inst;
-	c->inst_adsr1 = idata[2];
-	if (c->inst_adsr1 & 0x1F) {
-		int i = c->inst_adsr1 & 0x1F;
-		// calculate the constant to multiply envelope height by on each sample
-		int halflife;
-		if (i >= 30)
-			halflife = 32 - i;
-		else
-			halflife = ((512 >> (i / 3)) * (5 - i % 3));
-		c->decay_rate = pow(2.0, -1.0/(0.0055 * halflife * mixrate));
-	}
+	c->inst_adsr1 = idata[1];
+	c->inst_adsr2 = idata[2];
+	c->inst_gain = idata[3];
+	c->attack_rate = rates[(c->inst_adsr1 & 0xF) * 2 + 1];
+	c->decay_rate = rates[((c->inst_adsr1 >> 4) & 7) * 2 + 16];
+	c->sustain_level = ((c->inst_adsr2 >> 5) & 7) * 0x100 + 0x100;
+	c->sustain_rate = rates[c->inst_adsr2 & 0x1F];
+	c->gain_rate = rates[c->inst_gain & 0x1F];
 }
 
 // calculate how far to advance the sample pointer on each output sample
 void calc_freq(struct channel_state *c, int note16) {
 	static const WORD note_freq_table[] = {
-		0x085F, 0x08DF, 0x0965, 0x09F4, 0x0A8C, 0x0B2C, 0x0BD6, 0x0C8B,
+		0x085F, 0x08DE, 0x0965, 0x09F4, 0x0A8C, 0x0B2C, 0x0BD6, 0x0C8B,
 		0x0D4A, 0x0E14, 0x0EEA, 0x0FCD, 0x10BE
 	};
 
@@ -225,6 +229,22 @@ static void do_command(struct song_state *st, struct channel_state *c) {
 	}
 }
 
+static short initial_env_height(BOOL adsr_on, unsigned char gain) {
+	if (adsr_on || (gain & 0x80))
+		return 0;
+	else
+		return (gain & 0x7F) * 16;
+}
+
+void initialize_envelope(struct channel_state *c) {
+	c->env_height = initial_env_height(c->inst_adsr1 & 0x80, c->inst_gain);
+	c->next_env_height = c->env_height;
+	c->env_state = (c->inst_adsr1 & 0x80) ? ENV_STATE_ATTACK : ENV_STATE_GAIN;
+	c->next_env_state = c->env_state;
+	c->env_counter = 0;
+	c->env_fractional_counter = 0;
+}
+
 // $0654 + $08D4-$8EF
 static void do_note(struct song_state *st, struct channel_state *c, int note) {
 	// using >=CA as a note switches to that instrument and plays note A4
@@ -242,7 +262,7 @@ static void do_note(struct song_state *st, struct channel_state *c, int note) {
 
 		c->samp_pos = 0;
 		c->samp = &samp[spc[inst_base + 6*c->inst]];
-		c->env_height = 1;
+		initialize_envelope(c);
 
 		note &= 0x7F;
 		note += st->transpose + c->transpose;
@@ -297,7 +317,8 @@ void load_pattern() {
 			state.repeat_count = cur_song.repeat;
 		if (state.repeat_count == 0) {
 			state.ordnum--;
-			song_playing = FALSE;
+			stop_playing();
+			EnableMenuItem(hmenu, ID_PLAY, MF_ENABLED);
 			return;
 		}
 		state.ordnum = cur_song.repeat_pos;
@@ -320,8 +341,12 @@ void load_pattern() {
 }
 
 static void CF7(struct channel_state *c) {
-	if (c->note_release)
+	if (c->note_release) {
 		c->note_release--;
+	}
+	if (c->note_release == 0) {
+		c->next_env_state = ENV_STATE_KEY_OFF;
+	}
 
 	// 0D60
 	if (c->note.cycles) {
@@ -490,7 +515,7 @@ BOOL do_timer() {
 		state.cycle_timer -= 256;
 		while (!do_cycle(&state)) {
 			load_pattern();
-			if (!song_playing) return FALSE;
+			if (!is_playing()) return FALSE;
 			load_pattern_into_tracker();
 		}
 	} else {
@@ -506,6 +531,7 @@ void initialize_state() {
 		state.chan[i].volume.cur = 0xFF00;
 		state.chan[i].panning.cur = 0x0A00;
 		state.chan[i].samp_pos = -1;
+		set_inst(&state, &state.chan[i], 0);
 	}
 	state.volume.cur = 0xC000;
 	state.tempo.cur = 0x2000;
@@ -516,6 +542,7 @@ void initialize_state() {
 		load_pattern();
 	} else {
 		pattop_state = state;
-		song_playing = FALSE;
+		stop_playing();
+		EnableMenuItem(hmenu, ID_PLAY, MF_ENABLED);
 	}
 }

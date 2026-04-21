@@ -3,8 +3,10 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <mmsystem.h>
+#include <commctrl.h>
 #include "id.h"
 #include "ebmusv2.h"
+#include "misc.h"
 
 HWND hwndTracker;
 static HWND hwndOrder;
@@ -31,12 +33,12 @@ static char cs_title[] = "Channel state (0)";
 
 static const struct control_desc editor_controls[] = {
 // Upper
-	{ "Static",          10, 13, 42, 20, "Patterns:", 0, 0 }, //"Order" label
-	{ "ebmused_order",   56, 10,-420,20, NULL, IDC_ORDER, WS_BORDER }, //Pattern order list
-	{ "Static",        -360, 13, 55, 20, "Loop Song:", IDC_REP_CAPTION, 0 },
-	{ "Edit",          -303, 10, 30, 20, NULL, IDC_REPEAT, WS_BORDER | ES_NUMBER }, //Loop textbox
-	{ "Static",        -266, 13, 40, 20, "Position:", IDC_REP_POS_CAPTION, 0 },
-	{ "Edit",          -223, 10, 30, 20, NULL, IDC_REPEAT_POS, WS_BORDER | ES_NUMBER }, //Loop position textbox
+	{ "Static",          10, 13, 35, 20, "Order:", 0, 0 }, // "Order" label
+	{ "ebmused_order",   50, 10,-420,20, NULL, IDC_ORDER, WS_BORDER }, // Pattern order list
+	{ "Static",        -363, 13, 60, 20, "Loop Count:", IDC_REP_CAPTION, 0 },
+	{ "Edit",          -303, 10, 30, 20, NULL, IDC_REPEAT, WS_BORDER | ES_NUMBER }, // Loop textbox
+	{ "Static",        -268, 13, 45, 20, "Loop To:", IDC_REP_POS_CAPTION, 0 },
+	{ "Edit",          -223, 10, 30, 20, NULL, IDC_REPEAT_POS, WS_BORDER | ES_NUMBER }, // Loop position textbox
 	{ "Static",        -187, 13, 45, 20, "Pattern:", IDC_PAT_LIST_CAPTION, 0 },
 	{ "ComboBox",      -147,  9, 40,300, NULL, IDC_PAT_LIST, CBS_DROPDOWNLIST | WS_VSCROLL },
 	{ "Button",        -100,  9, 30, 20, "Add", IDC_PAT_ADD, 0 },
@@ -106,7 +108,7 @@ static COLORREF get_bkcolor(int sub_loops) {
 static void get_font_size(HWND hWnd) {
 	TEXTMETRIC tm;
 	HDC hdc = GetDC(hWnd);
-	HFONT oldfont = SelectObject(hdc, hfont);
+	HFONT oldfont = SelectObject(hdc, default_font());
 	GetTextMetrics(hdc, &tm);
 	SelectObject(hdc, oldfont);
 	ReleaseDC(hWnd, hdc);
@@ -177,6 +179,7 @@ static void cursor_moved(BOOL select) {
 		int esel_end = esel_start + text_length(sel_start, sel_end) - 1;
 		SendDlgItemMessage(hwndEditor, IDC_EDITBOX, EM_SETSEL, esel_start, esel_end);
 		SendDlgItemMessage(hwndEditor, IDC_EDITBOX, EM_SCROLLCARET, 0, 0);
+		set_tracker_status(0, cursor.ptr);
 	}
 	InvalidateRect(hwndTracker, NULL, FALSE);
 }
@@ -355,6 +358,8 @@ LRESULT CALLBACK EditorWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 				WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX, 0, 0, 0, 0,
 				hWnd, (HMENU)(IDC_ENABLE_CHANNEL_0 + i), hinstance, NULL);
 			SendMessage(b, BM_SETCHECK, chmask >> i & 1, 0);
+			// This font was set up earlier by the ebmused_order control
+			SendMessage(b, WM_SETFONT, order_font(), 0);
 		}
 		EditWndProc = (WNDPROC)SetWindowLongPtr(GetDlgItem(hWnd, IDC_EDITBOX), GWLP_WNDPROC, (LONG_PTR)TrackEditWndProc);
 		break;
@@ -429,13 +434,13 @@ LRESULT CALLBACK EditorWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 	case WM_SIZE:
 		editor_template.divy = HIWORD(lParam) - (font_height * 7 + 17);
 		move_controls(hWnd, &editor_template, lParam);
-		int start = 10 + GetSystemMetrics(SM_CXBORDER) + pos_width;
+		int start = scale_x(10) + GetSystemMetrics(SM_CXBORDER) + pos_width;
 		int right = start;
 		for (int i = 0; i < 8; i++) {
 			int left = right + 1;
 			right = start + (tracker_width * (i + 1) >> 3);
 			MoveWindow(GetDlgItem(hWnd, IDC_ENABLE_CHANNEL_0+i),
-				left, 40, right - left, 20, TRUE);
+				left, scale_y(40), right - left, scale_y(20), TRUE);
 		}
 		break;
 	default:
@@ -450,7 +455,7 @@ LRESULT CALLBACK OrderWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 		hwndOrder = hWnd;
 		break;
 	case WM_LBUTTONDOWN: {
-		int pos = LOWORD(lParam) / 25;
+		int pos = LOWORD(lParam) / scale_x(25);
 		if (pos >= cur_song.order_length) break;
 		SetFocus(hWnd);
 		goto_order(pos);
@@ -477,12 +482,14 @@ LRESULT CALLBACK OrderWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 		break;
 	case WM_PAINT: {
 		HDC hdc = BeginPaint(hWnd, &ps);
+		SelectObject(hdc, order_font());
 		RECT rc;
 		GetClientRect(hWnd, &rc);
+		int order_width = scale_x(25);
 		for (int i = 0; i < cur_song.order_length; i++) {
 			char buf[6];
 			int len = sprintf(buf, "%d", cur_song.order[i]);
-			rc.right = rc.left + 25;
+			rc.right = rc.left + order_width;
 			COLORREF tc = 0, bc = 0;
 			if (i == pattop_state.ordnum) {
 				tc = SetTextColor(hdc, GetSysColor(COLOR_HIGHLIGHTTEXT));
@@ -540,13 +547,26 @@ static void tracker_paint(HWND hWnd) {
 	pos += rc.top;
 	// simulate rounding towards zero, so these numbers
 	// will be properly aligned with the notes
-	rc.top = (rc.top + zoom) * font_height / zoom - font_height;
-	while (rc.top < ps.rcPaint.bottom) {
-		int len = sprintf(codes, "%d", pos);
+	for (rc.top = (rc.top + zoom) * font_height / zoom - font_height;
+		rc.top < ps.rcPaint.bottom;
+		rc.top = rc.bottom, pos += zoom)
+	{
 		rc.bottom = rc.top + font_height;
+
+		// Set colors for bar/measure indicators
+		if (pos % 0x60 == 0) {
+			SetTextColor(hdc, 808080);
+			SetBkColor(hdc, 0xF0F0F0);
+		} else if (pos % 0x18 == 0) {
+			SetTextColor(hdc, 0xFFFFFF);
+			SetBkColor(hdc, 0xA0A0A0);
+		} else {
+			SetTextColor(hdc, 0xFFFFFF);
+			SetBkColor(hdc, 0x808080);
+		}
+
+		int len = sprintf(codes, "%d", pos);
 		ExtTextOut(hdc, rc.left, rc.top, ETO_OPAQUE, &rc, codes, len, NULL);
-		rc.top = rc.bottom;
-		pos += zoom;
 	}
 
 	for (int chan = 0; chan < 8; chan++) {
@@ -718,7 +738,7 @@ static BOOL cursor_home(BOOL select) {
 				return FALSE;
 			}
 		} while (cursor.sub_ret != target.sub_ret
-		      || cursor.sub_count != target.sub_count);
+			|| cursor.sub_count != target.sub_count);
 	} else {
 		// Go to the top of the track
 		if (cursor.ptr == pattop_state.chan[cursor_chan].ptr)
@@ -743,8 +763,8 @@ static BOOL cursor_back(BOOL select) {
 		prev = cursor;
 		if (!cursor_fwd(select)) break;
 	} while (cursor.ptr != target.ptr
-	      || cursor.sub_ret != target.sub_ret
-	      || cursor.sub_count != target.sub_count);
+		|| cursor.sub_ret != target.sub_ret
+		|| cursor.sub_count != target.sub_count);
 	cursor_pos = prev_pos;
 	cursor = prev;
 	return TRUE;
@@ -778,8 +798,8 @@ static BOOL cursor_up(BOOL select) {
 			}
 			if (!cursor_fwd(select)) break;
 		} while (cursor.ptr != target.ptr
-		      || cursor.sub_ret != target.sub_ret
-		      || cursor.sub_count != target.sub_count);
+			|| cursor.sub_ret != target.sub_ret
+			|| cursor.sub_count != target.sub_count);
 	} else {
 		// find previous start-of-line code
 		BOOL at_start = TRUE;
@@ -793,8 +813,8 @@ static BOOL cursor_up(BOOL select) {
 			}
 			if (!cursor_fwd(select)) break;
 		} while (cursor.ptr != target.ptr
-		      || cursor.sub_ret != target.sub_ret
-		      || cursor.sub_count != target.sub_count);
+			|| cursor.sub_ret != target.sub_ret
+			|| cursor.sub_count != target.sub_count);
 	}
 	if (prev.ptr == NULL)
 		return FALSE;
@@ -827,7 +847,7 @@ static void cursor_to_xy(int x, int y, BOOL select) {
 //		int chan_xright = (tracker_width * (ch + 1) >> 3);
 
 		HDC hdc = GetDC(hwndTracker);
-		HFONT oldfont = SelectObject(hdc, hfont);
+		HFONT oldfont = SelectObject(hdc, default_font());
 
 		int target_pos = state.patpos + y * zoom / font_height;
 		pos = state.patpos + cs->next;
@@ -971,6 +991,7 @@ static void updateOrInsertDuration(BYTE(*callback)(BYTE, int), int durationOrOff
 				*cursor.ptr = duration;
 				cur_song.changed = TRUE;
 				InvalidateRect(hwndTracker, NULL, FALSE);
+				set_tracker_status(0, cursor.ptr);
 			}
 		}
 		else
@@ -1097,22 +1118,33 @@ void editor_command(int id) {
 		struct track *t = cursor_track;
 		int old_size = t->size;
 
-		if (start >= (t->track + 4)
+		// Try to merge the "created" subroutine with pre-existing subroutine commands
+		// immediately before and after it
+		if (start - t->track >= 4
 			&& start[-4] == 0xEF
-			&& *(WORD *)&start[-3] == sub
+			&& (start[-3] | (start[-2] << 8)) == sub
 			&& count + start[-1] <= 255)
 		{
 			count += start[-1];
 			start -= 4;
 		}
 		if (end[0] == 0xEF
-			&& *(WORD *)&end[1] == sub
+			&& (end[1] | (end[2] << 8)) == sub
 			&& count + end[3] <= 255)
 		{
 			count += end[3];
 			end += 4;
 		}
-		memmove(start + 4, end, t->track + (old_size + 1) - end);
+		// It's possible for the created subroutine to be smaller than 4 bytes (e.g. a single note).
+		// If it is, then we need to grow the track's allocation before we can shift the data over.
+		if (end - start < 4) {
+			ptrdiff_t endOffset = end - t->track;
+			ptrdiff_t startOffset = start - t->track;
+			t->track = realloc(t->track, old_size + 4 - (end - start) + 1);
+			end = t->track + endOffset;
+			start = t->track + startOffset;
+		}
+		memmove(start + 4, end, (old_size + 1) - (end - t->track));
 		t->size = old_size + 4 - (end - start);
 		start[0] = 0xEF;
 		start[1] = sub & 255;
@@ -1131,10 +1163,22 @@ void editor_command(int id) {
 		int off = cursor.sub_ret - t->track;
 		int count = cursor.sub_ret[-1];
 		int old_size = t->size;
+		// We're removing the [EF XXXX YY] command (4 bytes), and substituting in
+		// the subroutine's commands
 		t->size = (old_size - 4 + (subsize * count));
-		t->track = realloc(t->track, t->size + 1);
-		memmove(t->track + (off - 4) + (subsize * count), t->track + off,
-			(old_size + 1) - off);
+		if (t->size < old_size) {
+			// We already have enough room for the commands in the subroutine.
+			// Since we're making the allocation smaller, we need to move the data first.
+			// Otherwise we'll truncate the end of the track and corrupt it.
+			memmove(t->track + (off - 4) + (subsize * count), t->track + off,
+				(old_size + 1) - off);
+			t->track = realloc(t->track, t->size + 1);
+		} else {
+			// Make room for the commands inside the subroutine
+			t->track = realloc(t->track, t->size + 1);
+			memmove(t->track + (off - 4) + (subsize * count), t->track + off,
+				(old_size + 1) - off);
+		}
 		BYTE *dest = t->track + (off - 4);
 		for (int i = 0; i < count; i++) {
 			memcpy(dest, src, subsize);
@@ -1146,18 +1190,29 @@ void editor_command(int id) {
 	case ID_TRANSPOSE: {
 		int delta = DialogBox(hinstance, MAKEINTRESOURCE(IDD_TRANSPOSE),
 			hwndMain, TransposeDlgProc);
-		if (delta == 0) break;
-		for (BYTE *p = sel_start; p < sel_end; p = next_code(p)) {
-			int note = *p - 0x80;
-			if (note < 0 || note >= 0x48) continue;
-			note += delta;
-			note %= 0x48;
-			if (note < 0) note += 0x48;
-			*p = 0x80 + note;
+		if (delta != 0) {
+			for (BYTE *p = sel_start; p < sel_end; p = next_code(p)) {
+				if (*p == 0xF9) {
+					// F9 is a pitch bend to a specific note.
+					// To make transpose a reversible operation and prevent unwanted consequences,
+					// don't wrap around from B6 to C1 for these commands. (The composer might've
+					// used a note outside of that range.)
+					p[3] += delta;
+				} else if (*p >= 0x80 && *p < 0xC8) {
+					// This is a command to play a given note
+					int note = *p - 0x80;
+					note += delta;
+					// Wrap around note commands, so that transposing C1 one semitone down yields
+					// a B6
+					note %= 0x48;
+					if (note < 0) note += 0x48;
+					*p = 0x80 + note;
+				}
+			}
+			cur_song.changed = TRUE;
+			show_track_text();
+			InvalidateRect(hwndTracker, NULL, FALSE);
 		}
-		cur_song.changed = TRUE;
-		show_track_text();
-		InvalidateRect(hwndTracker, NULL, FALSE);
 		break;
 	}
 	case ID_ZOOM_IN:
@@ -1367,9 +1422,10 @@ static HDC hdcState;
 static void show_state(int pos, const char *buf) {
 	static const WORD xt[] = { 20, 80, 180, 240, 300, 360 };
 	RECT rc;
-	rc.left = xt[pos >> 4];
+	int left = xt[pos >> 4];
+	rc.left = scale_x(left);
 	rc.top = (pos & 15) * font_height + 1;
-	rc.right = rc.left + 60;
+	rc.right = scale_x(left + 60);
 	rc.bottom = rc.top + font_height;
 	ExtTextOut(hdcState, rc.left, rc.top, ETO_OPAQUE, &rc, buf, strlen(buf), NULL);
 }

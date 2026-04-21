@@ -7,7 +7,7 @@
 enum {
 	BRR_FLAG_END = 1,
 	BRR_FLAG_LOOP = 2,
-    BRR_BLOCK_SIZE = 9
+	BRR_BLOCK_SIZE = 9
 };
 
 struct sample samp[128];
@@ -37,9 +37,8 @@ static void decode_brr_block(int16_t *buffer, const uint8_t *block, BOOL first_b
 	int filter = (block[0] >> 2) & 3;
 
 	if (first_block) {
-		// According to SPC_DSP, the header is ignored on key on.
-		// Not enforcing this could result in a read out of bounds, if the filter is nonzero.
-		range = 0;
+		// Assume filter 0 here no matter what.
+		// Not enforcing this could result in a read out of bounds.
 		filter = 0;
 	}
 
@@ -56,15 +55,27 @@ static void decode_brr_block(int16_t *buffer, const uint8_t *block, BOOL first_b
 			s -= 16;
 		}
 
-		s <<= range - 1;
+		s *= 1 << range;
+		s >>= 1;
 		if (range > 12) {
 			s = (s < 0) ? -(1 << 11) : 0;
 		}
 
 		switch (filter) {
-			case 1: s += (buffer[-1] * 15) >> 5; break;
-			case 2: s += ((buffer[-1] * 61) >> 6) - ((buffer[-2] * 15) >> 5); break;
-			case 3: s += ((buffer[-1] * 115) >> 7) - ((buffer[-2] * 13) >> 5); break;
+			// The exact formulas used here affect how stable loop points are,
+			// which can wildly change the way certain glitch samples sound,
+			// like KungFuFurby's 3-block "SuperMiniGlitchNoise.brr."
+			case 1:
+				s += (1 * (buffer[-1] >> 1)) + ((1 * -(buffer[-1] >> 1)) >> 4);
+				break;
+			case 2:
+				s += (2 * (buffer[-1] >> 1)) + ((3 * -(buffer[-1] >> 1)) >> 5);
+				s += (-(buffer[-2] >> 1)) + ((1 * (buffer[-2] >> 1)) >> 4);
+				break;
+			case 3:
+				s += (2 * (buffer[-1] >> 1)) + ((13 * -(buffer[-1] >> 1)) >> 6);
+				s += (-(buffer[-2] >> 1)) + ((3 * (buffer[-2] >> 1)) >> 4);
+				break;
 		}
 
 		s *= 2;
@@ -125,7 +136,7 @@ void decode_samples(const unsigned char *ptrtable) {
 		} else
 			sa->loop_len = 0;
 
-		size_t allocation_size = sizeof(int16_t) * (sa->length + 1);
+		size_t allocation_size = sizeof(int16_t) * (sa->length + 3);
 
 		int16_t *p = malloc(allocation_size);
 		if (!p) {
@@ -162,7 +173,7 @@ void decode_samples(const unsigned char *ptrtable) {
 				if (full_loop_len == -1) {
 					needs_another_loop = TRUE;
 					ptrdiff_t diff = p - sa->data;
-					int16_t *new_stuff = realloc(sa->data, (sa->length + sa->loop_len + 1) * sizeof(int16_t));
+					int16_t *new_stuff = realloc(sa->data, (sa->length + sa->loop_len + 3) * sizeof(int16_t));
 					if (new_stuff == NULL) {
 						printf("realloc failed in BRR decoding (sn: %02X)\n", sn);
 						// TODO What do we do now? Replace this with something better
@@ -178,17 +189,29 @@ void decode_samples(const unsigned char *ptrtable) {
 				}
 			}
 
-			// In the vanilla game, the most iterations needed is 48 (for sample 0x17 in pack 5).
-			// Most samples need less than 10.
+			// In the vanilla game, the most iterations needed is 79 (for sample 0x19 in pack 5).
+			// Most samples need less than 10 or 15.
+			// Other examples of very unstable samples:
+			// - A Link to the Past glitchy sample 00: 124 iterations
+			// - KungFuFurby 3-block glitch noise sample: 231 iterations
+			// - Other grievous offenders exist, but I don't remember much about them
 			++times;
-		} while (needs_another_loop && times < 64);
+		} while (needs_another_loop && times < 512);
 
 		if (needs_another_loop) {
 			printf("Sample %02X took too many iterations to get into a cycle\n", sn);
 		}
 
-		// Put an extra sample at the end for easier interpolation
-		*p = sa->loop_len != 0 ? sa->data[sa->length - sa->loop_len] : 0;
+		// Put 3 extra samples at the end for easier interpolation
+		if (sa->loop_len != 0) {
+			p[0] = sa->data[sa->length - sa->loop_len + 0];
+			p[1] = sa->data[sa->length - sa->loop_len + 1];
+			p[2] = sa->data[sa->length - sa->loop_len + 2];
+		} else {
+			p[0] = 0;
+			p[1] = 0;
+			p[2] = 0;
+		}
 	}
 }
 

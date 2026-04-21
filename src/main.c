@@ -1,9 +1,15 @@
-#ifdef _MSC_VER
-	#define _ARGC __argc
-	#define _ARGV __argv
-#else
+// The original MinGW project uses a different name for this symbol for some reason.
+// Feature check macros from the MinGW-w64 wiki:
+// https://sourceforge.net/p/mingw-w64/wiki2/Answer%20Check%20For%20Mingw-w64/
+#ifdef __MINGW32__
+#include <_mingw.h>
+#endif
+#if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
 	#define _ARGC _argc
 	#define _ARGV _argv
+#else
+	#define _ARGC __argc
+	#define _ARGV __argv
 #endif
 
 #include "id.h"
@@ -14,37 +20,19 @@
 #include <windows.h>
 #include <commdlg.h>
 #include <commctrl.h>
+#include <mmsystem.h>
 #include "ebmusv2.h"
+#include "misc.h"
 
-#ifdef DEBUG
-#include <fcntl.h>
-
-int printf2(const char *format, ...)
-{
-	// this is for the command line output
-    char str[1024];
-
-    va_list argptr;
-    va_start(argptr, format);
-    int ret = vsnprintf(str, sizeof(str), format, argptr);
-    va_end(argptr);
-
-    fprintf(stdout, str);
-
-    return ret;
-}
-#endif
-
-
-static const BYTE starfox_sound_data_cmds[] = {
-	ID_EXPORT_STARFOX_BIN_CUSTOM,
-	ID_EXPORT_STARFOX_BIN_E000,
-	ID_EXPORT_STARFOX_BIN_E600,
-	ID_EXPORT_STARFOX_BIN_EC20,
-	ID_EXPORT_STARFOX_BIN_F000,
-	0
+enum {
+	MAIN_WINDOW_WIDTH = 720,
+	MAIN_WINDOW_HEIGHT = 540,
+	TAB_CONTROL_WIDTH = 600,
+	TAB_CONTROL_HEIGHT = 25,
+	STATUS_WINDOW_HEIGHT = 24,
+	CODELIST_WINDOW_WIDTH = 640,
+	CODELIST_WINDOW_HEIGHT = 480
 };
-
 
 struct song cur_song;
 BYTE packs_loaded[3] = { 0xFF, 0xFF, 0xFF };
@@ -55,10 +43,11 @@ int midiDevice = -1;
 BOOL spcImported = 0;
 HINSTANCE hinstance;
 HWND hwndMain;
+HWND hwndStatus;
 HMENU hmenu, hcontextmenu;
-HFONT hfont;
 HWND tab_hwnd[NUM_TABS];
 
+static const int INST_TAB = 1;
 static int current_tab;
 static const char *const tab_class[NUM_TABS] = {
 	"ebmused_bgmlist",
@@ -66,10 +55,10 @@ static const char *const tab_class[NUM_TABS] = {
 	"ebmused_editor",
 	"ebmused_packs"
 };
-static char *const tab_name[NUM_TABS] = {
-	"Song Table",
+static const char *const tab_name[NUM_TABS] = {
+	"BGM Table",
 	"Instruments",
-	"Sequence Editor",
+	"Tracker",
 	"Data Packs"
 };
 LRESULT CALLBACK BGMListWndProc(HWND, UINT, WPARAM, LPARAM);
@@ -82,7 +71,6 @@ static const WNDPROC tab_wndproc[NUM_TABS] = {
 	EditorWndProc,
 	PackListWndProc,
 };
-
 
 static char filename[MAX_PATH];
 static OPENFILENAME ofn;
@@ -118,6 +106,7 @@ BOOL get_original_rom() {
 static void tab_selected(int new) {
 	if (new < 0 || new >= NUM_TABS) return;
 	current_tab = new;
+	format_status(0, "%s", "");
 
 	for (int i = 0; i < NUM_TABS; i++) {
 		if (tab_hwnd[i]) {
@@ -128,9 +117,10 @@ static void tab_selected(int new) {
 
 	RECT rc;
 	GetClientRect(hwndMain, &rc);
+	int status_height = hwndStatus ? STATUS_WINDOW_HEIGHT : 0;
 	tab_hwnd[new] = CreateWindow(tab_class[new], NULL,
 		WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN,
-		0, 25, rc.right, rc.bottom - 25,
+		0, scale_y(TAB_CONTROL_HEIGHT), rc.right, rc.bottom - scale_y(TAB_CONTROL_HEIGHT + status_height),
 		hwndMain, NULL, hinstance, NULL);
 
 	if (new == 1) {
@@ -384,6 +374,8 @@ static void import_spc() {
 				decompile_song(&cur_song, details.music_addr, 0xffff);
 			}
 			initialize_state();
+			cur_song.changed = TRUE;
+			save_cur_song_to_pack();
 			SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
 
 			enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
@@ -737,26 +729,44 @@ BOOL save_all_packs() {
 	return success;
 }
 
+static BOOL validate_playable(void) {
+	if (cur_song.order_length == 0) {
+		MessageBox2("No song loaded", "Play", MB_ICONEXCLAMATION);
+		return FALSE;
+	} else if (samp[0].data == NULL) {
+		MessageBox2("No instruments loaded", "Play", MB_ICONEXCLAMATION);
+		return FALSE;
+	} else {
+		return TRUE;
+	}
+}
+
 LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
-	case 0x3BB: case 0x3BC: case 0x3BD: // MM_WOM_OPEN, CLOSE, DONE
+	case MM_WOM_OPEN: case MM_WOM_CLOSE: case MM_WOM_DONE:
 		winmm_message(uMsg);
 		break;
 	case WM_CREATE: {
 		HWND tabs = CreateWindow(WC_TABCONTROL, NULL,
-			WS_CHILD | WS_VISIBLE | TCS_BUTTONS, 0, 0, 600, 25,
+			WS_CHILD | WS_VISIBLE | TCS_BUTTONS, 0, 0, scale_x(TAB_CONTROL_WIDTH), scale_y(TAB_CONTROL_HEIGHT),
 			hWnd, NULL, hinstance, NULL);
-		TC_ITEM item;
+
+		TC_ITEM item = {0};
 		item.mask = TCIF_TEXT;
 		for (int i = 0; i < NUM_TABS; i++) {
-			item.pszText = tab_name[i];
+			item.pszText = (char*)tab_name[i];
 			(void)TabCtrl_InsertItem(tabs, i, &item);
 		}
+		SendMessage(tabs, WM_SETFONT, tabs_font(), TRUE);
 		break;
 	}
-	case WM_SIZE:
-		MoveWindow(tab_hwnd[current_tab], 0, 25, LOWORD(lParam), HIWORD(lParam) - 25, TRUE);
+	case WM_SIZE: {
+		int tabs_height = scale_y(TAB_CONTROL_HEIGHT);
+		int status_height = hwndStatus ? scale_y(STATUS_WINDOW_HEIGHT) : 0;
+		MoveWindow(tab_hwnd[current_tab], 0, tabs_height, LOWORD(lParam), HIWORD(lParam) - tabs_height - status_height, TRUE);
+		SendMessage(hwndStatus, uMsg, wParam, lParam);
 		break;
+	}
 	case WM_COMMAND: {
 		WORD id = LOWORD(wParam);
 		switch (id) {
@@ -796,6 +806,10 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case ID_OPTIONS: {
 			extern BOOL CALLBACK OptionsDlgProc(HWND,UINT,WPARAM,LPARAM);
 			DialogBox(hinstance, MAKEINTRESOURCE(IDD_OPTIONS), hWnd, OptionsDlgProc);
+			if (current_tab == INST_TAB) {
+				// Re-enable playback for the instruments tab...
+				start_playing();
+			}
 			break;
 		}
 		case ID_CUT:
@@ -821,17 +835,38 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			editor_command(id);
 			break;
 		case ID_PLAY:
-			if (cur_song.order_length == 0)
-				MessageBox2("No song loaded", "Play", MB_ICONEXCLAMATION);
-			else if (samp[0].data == NULL)
-				MessageBox2("No instruments loaded", "Play", MB_ICONEXCLAMATION);
-			else {
-				if (sound_init()) song_playing = TRUE;
+			if (validate_playable()) {
+				start_playing();
+				EnableMenuItem(hmenu, ID_STOP, MF_ENABLED);
 			}
 			break;
 		case ID_STOP:
-			song_playing = FALSE;
+			if (current_tab == INST_TAB) {
+				stop_capturing_audio();
+			} else {
+				stop_playing();
+				EnableMenuItem(hmenu, ID_PLAY, MF_ENABLED);
+			}
 			break;
+		case ID_CAPTURE_AUDIO: {
+			if (current_tab == INST_TAB) {
+				if (is_capturing_audio()) {
+					stop_capturing_audio();
+				} else {
+					start_capturing_audio();
+				}
+			} else {
+				if (is_capturing_audio()) {
+					stop_capturing_audio();
+				} else {
+					if (validate_playable() && start_capturing_audio()) {
+						start_playing();
+						EnableMenuItem(hmenu, ID_STOP, MF_ENABLED);
+					}
+				}
+			}
+			break;
+		}
 		case ID_OCTAVE_1: case ID_OCTAVE_1+1: case ID_OCTAVE_1+2:
 		case ID_OCTAVE_1+3: case ID_OCTAVE_1+4:
 			octave = id - ID_OCTAVE_1;
@@ -841,12 +876,31 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case ID_HELP:
 			CreateWindow("ebmused_codelist", "Code list",
 				WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-				CW_USEDEFAULT, CW_USEDEFAULT, 640, 480,
+				CW_USEDEFAULT, CW_USEDEFAULT, scale_x(CODELIST_WINDOW_WIDTH), scale_y(CODELIST_WINDOW_HEIGHT),
 				NULL, NULL, hinstance, NULL);
 			break;
 		case ID_ABOUT: {
 			extern BOOL CALLBACK AboutDlgProc(HWND,UINT,WPARAM,LPARAM);
 			DialogBox(hinstance, MAKEINTRESOURCE(IDD_ABOUT), hWnd, AboutDlgProc);
+			break;
+		}
+		case ID_STATUS_BAR: {
+			if (hwndStatus) {
+				DestroyWindow(hwndStatus);
+				hwndStatus = NULL;
+				CheckMenuItem(hmenu, ID_STATUS_BAR, MF_UNCHECKED);
+
+				RECT rc;
+				GetClientRect(hwndMain, &rc);
+				MoveWindow(tab_hwnd[current_tab], 0, scale_y(TAB_CONTROL_HEIGHT), rc.right, rc.bottom - scale_y(TAB_CONTROL_HEIGHT), TRUE);
+			} else {
+				hwndStatus = CreateStatusWindow(WS_CHILD | WS_VISIBLE, NULL, hwndMain, IDS_STATUS);
+				CheckMenuItem(hmenu, ID_STATUS_BAR, MF_CHECKED);
+
+				RECT rc;
+				GetClientRect(hwndMain, &rc);
+				MoveWindow(tab_hwnd[current_tab], 0, scale_y(TAB_CONTROL_HEIGHT), rc.right, rc.bottom - scale_y(TAB_CONTROL_HEIGHT + STATUS_WINDOW_HEIGHT), TRUE);
+			}
 			break;
 		}
 		default: printf("Command %d not yet implemented\n", id); break;
@@ -928,6 +982,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	wc.lpszClassName = "ebmused_tracker";
 	RegisterClass(&wc);
 
+	setup_dpi_scale_values();
 	InitCommonControls();
 
 	#ifdef DEBUG
@@ -949,18 +1004,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 //	SetUnhandledExceptionFilter(exfilter);
 
-	hwndMain = CreateWindow("ebmused_main", CLI_FILEDESCRIPTION_STR,
+	set_up_fonts();
+
+	hwndMain = CreateWindow("ebmused_main", "EarthBound Music Editor",
 		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-		CW_USEDEFAULT, CW_USEDEFAULT, 720, 540,
+		CW_USEDEFAULT, CW_USEDEFAULT, scale_x(MAIN_WINDOW_WIDTH), scale_y(MAIN_WINDOW_HEIGHT),
 		NULL, NULL, hInstance, NULL);
+	hwndStatus = CreateStatusWindow(WS_CHILD | WS_VISIBLE, NULL, hwndMain, IDS_STATUS);
 	ShowWindow(hwndMain, nCmdShow);
 
 	hmenu = GetMenu(hwndMain);
 	CheckMenuRadioItem(hmenu, ID_OCTAVE_1, ID_OCTAVE_1+4, ID_OCTAVE_1+2, MF_BYCOMMAND);
 
 	hcontextmenu = LoadMenu(hInstance, MAKEINTRESOURCE(IDM_CONTEXTMENU));
-
-	hfont = GetStockObject(DEFAULT_GUI_FONT);
 
 	HACCEL hAccel = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDA_ACCEL));
 
@@ -975,5 +1031,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		}
 	}
 	DestroyMenu(hcontextmenu);
+	destroy_fonts();
 	return msg.wParam;
 }

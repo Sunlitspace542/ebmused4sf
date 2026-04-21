@@ -1,5 +1,6 @@
 #define IDM_MENU 1
 #define IDM_CONTEXTMENU 2
+#define IDS_STATUS 3
 #define ID_OPEN 100
 #define ID_SAVE_ALL 101
 #define ID_CLOSE 102
@@ -29,9 +30,11 @@
 #define ID_OPTIONS 130
 #define ID_PLAY 131
 #define ID_STOP 132
-#define ID_CLEAR_SONG 133
+#define ID_CAPTURE_AUDIO 133
+#define ID_CLEAR_SONG 134
 #define ID_ZOOM_IN 140
 #define ID_ZOOM_OUT 141
+#define ID_STATUS_BAR 142
 #define ID_OCTAVE_1 150
 #define ID_HELP 160
 #define ID_ABOUT 161
@@ -48,6 +51,7 @@
 #define IDC_BUFSIZE 4
 
 #define IDD_ABOUT 2
+#define IDC_HOMEPAGELINK 3
 
 #define IDD_TRANSPOSE 3
 #define IDC_TRANSPOSE_OFF 5
