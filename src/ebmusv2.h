@@ -7,6 +7,7 @@
 #include "versioninfo.h"
 
 #ifdef DEBUG
+extern int printf2(const char *format, ...);
 #define printf printf2
 #endif
 

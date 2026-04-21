@@ -14,19 +14,19 @@ DEBUG_O = $(addprefix $(DEBUG_O_DIR)/, $O)
 CC = gcc -W -Wall -Werror=vla -std=gnu99 -fno-exceptions
 
 RELEASE_FLAGS = -DNDEBUG -Os
-DEBUG_FLAGS = -Og -g
+DEBUG_FLAGS = -Og -g -DDEBUG
 LINK_FLAGS = -lcomctl32 -lcomdlg32 -lgdi32 -lwinmm
 
-release: $(RELEASE_DIR)/ebmused.exe
-debug: $(DEBUG_DIR)/ebmused.exe
+release: $(RELEASE_DIR)/ebmused4sf.exe
+debug: $(DEBUG_DIR)/ebmused4sf.exe
 
-$(RELEASE_DIR)/ebmused.exe: $(RELEASE_O)
+$(RELEASE_DIR)/ebmused4sf.exe: $(RELEASE_O)
 	$(CC) $(RELEASE_O) -static-libgcc -mwindows -s $(LINK_FLAGS) -o $@
 
 $(RELEASE_O_DIR)/%.o: %.c | $(RELEASE_O_DIR)
 	$(CC) $(RELEASE_FLAGS) -c $< -o $@
 
-$(DEBUG_DIR)/ebmused.exe: $(DEBUG_O)
+$(DEBUG_DIR)/ebmused4sf.exe: $(DEBUG_O)
 	$(CC) $(DEBUG_O) $(LINK_FLAGS) -o $@
 
 $(DEBUG_O_DIR)/%.o: %.c | $(DEBUG_O_DIR)
