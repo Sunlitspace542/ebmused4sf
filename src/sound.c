@@ -89,7 +89,7 @@ BOOL is_capturing_audio(void) {
 
 BOOL start_capturing_audio(void) {
 	if (song_playing || sound_init()) {
-		char *file = open_dialog(GetSaveFileName, "WAV files (*.wav)\0*.wav\0", "wav", OFN_OVERWRITEPROMPT);
+		char *file = open_dialog(GetSaveFileName, "WAV files (*.wav)\0*.wav\0", "*.wav", "wav", OFN_OVERWRITEPROMPT);
 		if (file) {
 			stop_capturing_audio();
 			wav_file = fopen(file, "wb");
@@ -480,7 +480,7 @@ void winmm_message(UINT uMsg) {
 	}
 }
 
-BOOL CALLBACK OptionsDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+INT_PTR CALLBACK OptionsDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_INITDIALOG:
 		SetDlgItemInt(hWnd, IDC_RATE, mixrate, FALSE);

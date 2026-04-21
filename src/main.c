@@ -24,6 +24,35 @@
 #include "ebmusv2.h"
 #include "misc.h"
 
+#ifdef DEBUG
+#include <fcntl.h>
+
+int printf2(const char *format, ...)
+{
+	// this is for the command line output
+    char str[1024];
+
+    va_list argptr;
+    va_start(argptr, format);
+    int ret = vsnprintf(str, sizeof(str), format, argptr);
+    va_end(argptr);
+
+    fprintf(stdout, str);
+
+    return ret;
+}
+#endif
+
+
+static const BYTE starfox_sound_data_cmds[] = {
+	ID_EXPORT_STARFOX_BIN_CUSTOM,
+	ID_EXPORT_STARFOX_BIN_E000,
+	ID_EXPORT_STARFOX_BIN_E600,
+	ID_EXPORT_STARFOX_BIN_EC20,
+	ID_EXPORT_STARFOX_BIN_F000,
+	0
+};
+
 enum {
 	MAIN_WINDOW_WIDTH = 720,
 	MAIN_WINDOW_HEIGHT = 540,
@@ -74,7 +103,7 @@ static const WNDPROC tab_wndproc[NUM_TABS] = {
 
 static char filename[MAX_PATH];
 static OPENFILENAME ofn;
-static char *open_dialog(BOOL (WINAPI *func)(LPOPENFILENAME),
+char *open_dialog(BOOL (WINAPI *func)(LPOPENFILENAME),
 	char *filter, char *extension, char *file, DWORD flags)
 {
 	if (file) {							// suggested filename
@@ -440,24 +469,6 @@ static void export_spc() {
 	}
 }
 
-// Loads pack by index and copies its contents to "spc" at the appropriate locations.
-static void pack_to_spc(BYTE pack, BYTE* spc) {
-	if (pack < NUM_PACKS) {
-		const WORD header_size = 0x100;
-
-		struct pack *p = load_pack(pack);
-		for (int block = 0; block < p->block_count; block++) {
-			struct block *b = &p->blocks[block];
-
-			if (b->size <= 0x10000 - b->spc_address) {
-				memcpy(spc + header_size + b->spc_address, b->data, b->size);
-			} else {
-				printf("SPC pack 0x%x block %d too large.\n", pack, block);
-			}
-		}
-	}
-}
-
 static void export_starfox_bin(WORD dstMusic) {
 	// compile_song corrupts the spc and any potential samples/instruments, so we need to make a copy first...
 	BYTE *spc_copy = malloc(0x10000 * sizeof(*spc_copy));
@@ -515,7 +526,7 @@ WORD arg2word(char * input) {
 	char *remaining_input;
 
 	// get the input address as unsigned int
-	WORD value = strtoul(input, &remaining_input, 16);
+	unsigned long value = strtoul(input, &remaining_input, 16);
 
 	if (*remaining_input != '\0' || value > 0xFFFF)
 	{
@@ -523,12 +534,13 @@ WORD arg2word(char * input) {
 		return 1;
 	}
 
-	customAddress = value;
+	customAddress = (WORD)value;
 
 	return 0;
 }
 
-BOOL CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+INT_PTR CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	(void)lParam;
 	switch (uMsg) {
 	case WM_INITDIALOG:
 		// limit input to 4 chars
@@ -539,7 +551,6 @@ BOOL CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 		switch (LOWORD(wParam)) {
 		case IDOK:
 			char inputAddressStr[5];
-			WORD inputAddressWord;
 			GetDlgItemText(hWnd, IDC_CUSTOM_ADDRESS, inputAddressStr, 5);
 			if (!arg2word(inputAddressStr)){
 				export_starfox_bin(customAddress);
@@ -547,7 +558,7 @@ BOOL CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 				MessageBox(NULL, "Address must be 4 hex characters or less.\nExample: E000", "ERROR", MB_OK | MB_ICONERROR);
 				break;
 			}
-			// fallthrough
+			__attribute__((fallthrough));
 		case IDCANCEL:
 			EndDialog(hWnd, LOWORD(wParam));
 			break;
@@ -757,7 +768,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			item.pszText = (char*)tab_name[i];
 			(void)TabCtrl_InsertItem(tabs, i, &item);
 		}
-		SendMessage(tabs, WM_SETFONT, tabs_font(), TRUE);
+		SendMessage(tabs, WM_SETFONT, (WPARAM)tabs_font(), TRUE);
 		break;
 	}
 	case WM_SIZE: {
@@ -804,7 +815,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case ID_EXPORT_STARFOX_BIN_F000: export_starfox_bin(0xF000); break;
 		case ID_EXIT: DestroyWindow(hWnd); break;
 		case ID_OPTIONS: {
-			extern BOOL CALLBACK OptionsDlgProc(HWND,UINT,WPARAM,LPARAM);
+			extern INT_PTR CALLBACK OptionsDlgProc(HWND,UINT,WPARAM,LPARAM);
 			DialogBox(hinstance, MAKEINTRESOURCE(IDD_OPTIONS), hWnd, OptionsDlgProc);
 			if (current_tab == INST_TAB) {
 				// Re-enable playback for the instruments tab...
@@ -880,7 +891,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				NULL, NULL, hinstance, NULL);
 			break;
 		case ID_ABOUT: {
-			extern BOOL CALLBACK AboutDlgProc(HWND,UINT,WPARAM,LPARAM);
+			extern INT_PTR CALLBACK AboutDlgProc(HWND,UINT,WPARAM,LPARAM);
 			DialogBox(hinstance, MAKEINTRESOURCE(IDD_ABOUT), hWnd, AboutDlgProc);
 			break;
 		}
@@ -934,6 +945,8 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	LPSTR lpCmdLine, int nCmdShow)
 {
+	(void)hPrevInstance;
+	(void)lpCmdLine;
 	hinstance = hInstance;
 	WNDCLASS wc;
 	MSG msg;
@@ -1006,7 +1019,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 	set_up_fonts();
 
-	hwndMain = CreateWindow("ebmused_main", "EarthBound Music Editor",
+	hwndMain = CreateWindow("ebmused_main", CLI_FILEDESCRIPTION_STR,
 		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
 		CW_USEDEFAULT, CW_USEDEFAULT, scale_x(MAIN_WINDOW_WIDTH), scale_y(MAIN_WINDOW_HEIGHT),
 		NULL, NULL, hInstance, NULL);

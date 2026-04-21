@@ -17,7 +17,7 @@ int fgetw(FILE *f);
 BOOL SetDlgItemHex(HWND hwndDlg, int idControl, unsigned int uValue, int size);
 int GetDlgItemHex(HWND hwndDlg, int idControl);
 int MessageBox2(char *error, char *title, int flags);
-char *open_dialog(BOOL (WINAPI *func)(LPOPENFILENAME ofn), char *filter, char *extension, DWORD flags);
+char *open_dialog(BOOL (WINAPI *func)(LPOPENFILENAME ofn), char *filter, char *extension, char *file, DWORD flags);
 void setup_dpi_scale_values(void);
 int scale_x(int n);
 int scale_y(int n);

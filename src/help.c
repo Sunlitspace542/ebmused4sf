@@ -158,7 +158,7 @@ static LRESULT CALLBACK HomepageLinkProc(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 	return CallWindowProc(HomepageLinkWndProc, hWnd, uMsg, wParam, lParam);
 }
 
-BOOL CALLBACK AboutDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+INT_PTR CALLBACK AboutDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch(uMsg) {
 		case WM_INITDIALOG: {
 			HWND hwndLink = GetDlgItem(hWnd, IDC_HOMEPAGELINK);
@@ -171,7 +171,6 @@ BOOL CALLBACK AboutDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			lf.lfUnderline = TRUE;
 			HFONT hUnderlinedFont = CreateFontIndirect(&lf);
 			SendMessage(hwndLink, WM_SETFONT, (WPARAM)hUnderlinedFont, FALSE);
-			SetTextColor(hwndLink, RGB(0, 0, 192));
 
 			break;
 		}

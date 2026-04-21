@@ -359,7 +359,7 @@ LRESULT CALLBACK EditorWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 				hWnd, (HMENU)(IDC_ENABLE_CHANNEL_0 + i), hinstance, NULL);
 			SendMessage(b, BM_SETCHECK, chmask >> i & 1, 0);
 			// This font was set up earlier by the ebmused_order control
-			SendMessage(b, WM_SETFONT, order_font(), 0);
+			SendMessage(b, WM_SETFONT, (WPARAM)order_font(), 0);
 		}
 		EditWndProc = (WNDPROC)SetWindowLongPtr(GetDlgItem(hWnd, IDC_EDITBOX), GWLP_WNDPROC, (LONG_PTR)TrackEditWndProc);
 		break;
@@ -1189,7 +1189,7 @@ void editor_command(int id) {
 	}
 	case ID_TRANSPOSE: {
 		int delta = DialogBox(hinstance, MAKEINTRESOURCE(IDD_TRANSPOSE),
-			hwndMain, TransposeDlgProc);
+			hwndMain, (DLGPROC)TransposeDlgProc);
 		if (delta != 0) {
 			for (BYTE *p = sel_start; p < sel_end; p = next_code(p)) {
 				if (*p == 0xF9) {
