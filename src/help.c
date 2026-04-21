@@ -178,7 +178,7 @@ INT_PTR CALLBACK AboutDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 			switch(LOWORD(wParam)) {
 				case IDC_HOMEPAGELINK:
 					if (HIWORD(wParam) == BN_CLICKED) {
-						ShellExecute(hWnd, "open", "https://github.com/PKHackers/ebmused/", NULL, NULL, SW_SHOWNORMAL);
+						ShellExecute(hWnd, "open", CLI_REPOLINK_STR, NULL, NULL, SW_SHOWNORMAL);
 					}
 					break;
 				case IDOK:
