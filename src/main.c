@@ -404,66 +404,33 @@ enum SPC_RESULTS try_parse_spc(const BYTE* spc, struct spcDetails *out_details) 
 }
 
 static void new_song() {
-	// Load blank SPC file.
-	HRSRC res = FindResource(hinstance, MAKEINTRESOURCE(IDRC_SPCTEMPLATE), RT_RCDATA);
+	// Load template SONG_DATA file.
+	HRSRC res = FindResource(hinstance, MAKEINTRESOURCE(IDRC_SONGTEMPLATE), RT_RCDATA);
 	HGLOBAL res_handle = res ? LoadResource(NULL, res) : NULL;
 
 	// Backup the currently loaded SPC in case we need to restore it upon an error.
 	// This can be updated once methods like decode_samples don't rely on the global "spc" variable.
 	BYTE backup_spc[0x10000];
 	memcpy(backup_spc, spc, 0x10000);
-	WORD original_sample_ptr_base = sample_ptr_base;
-
-	BYTE dsp[0x80];
 
 	if (res_handle) {
-		BYTE* res_data = (BYTE*)LockResource(res_handle)+0x100; // skip header page
-		DWORD spc_size = SizeofResource(NULL, res);
+		BYTE* res_data = (BYTE*)LockResource(res_handle);
+		DWORD bin_size = SizeofResource(NULL, res);
 
-		memcpy(spc, res_data, 0x10000);
-		memcpy(dsp, res_data+0x10000, 0x80);
+		memcpy(spc+0xE600, res_data, bin_size);
+			free_song(&cur_song);
+			decompile_song(&cur_song, 0xE600, 0xFFFF);
 
-		sample_ptr_base = dsp[0x5D] << 8;
-		free_samples();
-		decode_samples(&spc[sample_ptr_base]);
-
-		struct spcDetails details;
-		enum SPC_RESULTS results = try_parse_spc(spc, &details);
-		printf("%s\n", filename);
-		if (results) {
-			if (results & HAS_INSTRUMENTS) {
-				printf("Inst Prms: %#X\n", details.instrument_table_addr);
-				inst_base = details.instrument_table_addr;
-			}
-			if (results & HAS_MUSIC) {
-				printf("Song Tabl: %#X\n", details.music_table_addr);
-				//printf("Music index found: %#X\n", details.music_index);
-				printf("Song Data: %#X\n\n", details.music_addr);
-
-				free_song(&cur_song);
-				decompile_song(&cur_song, details.music_addr, 0xffff);
-			}
 			initialize_state();
 			cur_song.changed = TRUE;
 			save_cur_song_to_pack();
 			SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
 
 			enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
-			spcImported = 1;
-		} else {
-			// Restore SPC state and samples
-			memcpy(spc, backup_spc, 0x10000);
-			sample_ptr_base = original_sample_ptr_base;
-			free_samples();
-			decode_samples(&spc[sample_ptr_base]);
-
-			MessageBox2("Could not parse SPC.", "SPC Import", MB_ICONEXCLAMATION);
-		}
 	} else {
-		// Restore SPC state
 		memcpy(spc, backup_spc, 0x10000);
 
-		MessageBox2("Template SPC could not be loaded", "Export SPC", MB_ICONEXCLAMATION);
+		MessageBox2("Template song could not be loaded", "New Song", MB_ICONEXCLAMATION);
 	}
 	}
 
@@ -611,6 +578,7 @@ void load_song_data(WORD dstMusic) {
 	initialize_state();
 	cur_song.changed = TRUE;
 	save_cur_song_to_pack();
+	enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
 
 }
 

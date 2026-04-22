@@ -70,4 +70,4 @@
 #define IDD_SBN_IMPORT 7
 
 #define IDRC_SPC 1
-#define IDRC_SPCTEMPLATE 2
+#define IDRC_SONGTEMPLATE 2
