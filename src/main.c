@@ -78,10 +78,11 @@ HWND hwndStatus;
 HMENU hmenu, hcontextmenu;
 HWND tab_hwnd[NUM_TABS];
 
-// SBN import addresses
-WORD sbn_sample_dir_addr = 0x3C00;
-WORD sbn_sample_data_addr = 0x4000; 
-WORD sbn_inst_table_addr = 0x3D00;
+// SBN import block numbers
+int sbn_sample_dir_block = 0;
+int sbn_sample_data_block = 1;
+int sbn_inst_table_block = 2;
+BOOL sbn_load_inst_table = TRUE;
 
 static const int INST_TAB = 1;
 static int current_tab;
@@ -980,24 +981,35 @@ INT_PTR CALLBACK SbnImportDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
 	switch (uMsg) {
 	case WM_INITDIALOG: {
 		char buf[5];
-		sprintf(buf, "%04X", sbn_sample_dir_addr);
+		sprintf(buf, "%d", sbn_sample_dir_block);
 		SetDlgItemText(hWnd, IDC_SAMPLE_DIR_ADDR, buf);
-		sprintf(buf, "%04X", sbn_sample_data_addr);
+		sprintf(buf, "%d", sbn_sample_data_block);
 		SetDlgItemText(hWnd, IDC_SAMPLE_DATA_ADDR, buf);
-		sprintf(buf, "%04X", sbn_inst_table_addr);
-		SetDlgItemText(hWnd, IDC_INST_TABLE_ADDR, buf);
+		CheckDlgButton(hWnd, IDC_INST_TABLE_ADDR, sbn_load_inst_table ? BST_CHECKED : BST_UNCHECKED);
+		sprintf(buf, "%d", sbn_inst_table_block);
+		SetDlgItemText(hWnd, IDC_INST_TABLE_BLOCK, buf);
+		EnableWindow(GetDlgItem(hWnd, IDC_INST_TABLE_BLOCK), sbn_load_inst_table);
 		return TRUE;
 	}
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
+		case IDC_INST_TABLE_ADDR: {
+			// Toggle enable state of block number field
+			BOOL checked = IsDlgButtonChecked(hWnd, IDC_INST_TABLE_ADDR);
+			EnableWindow(GetDlgItem(hWnd, IDC_INST_TABLE_BLOCK), checked);
+			return TRUE;
+		}
 		case IDOK: {
 			char buf[5];
 			GetDlgItemText(hWnd, IDC_SAMPLE_DIR_ADDR, buf, 5);
-			sbn_sample_dir_addr = (WORD)strtol(buf, NULL, 16);
+			sbn_sample_dir_block = atoi(buf);
 			GetDlgItemText(hWnd, IDC_SAMPLE_DATA_ADDR, buf, 5);
-			sbn_sample_data_addr = (WORD)strtol(buf, NULL, 16);
-			GetDlgItemText(hWnd, IDC_INST_TABLE_ADDR, buf, 5);
-			sbn_inst_table_addr = (WORD)strtol(buf, NULL, 16);
+			sbn_sample_data_block = atoi(buf);
+			sbn_load_inst_table = IsDlgButtonChecked(hWnd, IDC_INST_TABLE_ADDR) == BST_CHECKED;
+			if (sbn_load_inst_table) {
+				GetDlgItemText(hWnd, IDC_INST_TABLE_BLOCK, buf, 5);
+				sbn_inst_table_block = atoi(buf);
+			}
 			EndDialog(hWnd, 1);
 			return TRUE;
 		}
@@ -1035,9 +1047,10 @@ void import_sbn() {
 		fread(sbn_data, file_size, 1, f);
 		fclose(f);
 
-		// Parse SBN and extract needed data
+		// Parse SBN and extract needed data based on block numbers
 		// For now, just copy the relevant blocks to spc[]
-		load_sbn_pack(sbn_data, file_size, sbn_sample_dir_addr, sbn_inst_table_addr);
+		load_sbn_pack(sbn_data, file_size, sbn_sample_dir_block, sbn_sample_data_block, 
+		              sbn_inst_table_block, sbn_load_inst_table);
 		free(sbn_data);
 
 		// Mark as imported

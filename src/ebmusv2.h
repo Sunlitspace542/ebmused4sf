@@ -60,7 +60,7 @@ BOOL save_all_packs(void);
 void import_sfm(void);
 void export_sfm(void);
 void import_sbn(void);
-void load_sbn_pack(BYTE *pack_data, int pack_size, WORD sample_dir_addr, WORD inst_table_addr);
+void load_sbn_pack(BYTE *pack_data, int pack_size, int sample_dir_block, int sample_data_block, int inst_table_block, BOOL load_inst_table);
 
 // bgmlist.c
 
