@@ -581,6 +581,39 @@ static void export_spc() {
 	}
 }
 
+void load_song_data(WORD dstMusic) {
+	char *file = open_dialog(GetOpenFileName,
+		"Song data (*.bin)\0*.bin\0All Files\0*.*\0\0",
+		NULL, NULL, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY);
+	if (!file) return;
+
+	FILE *f = fopen(file, "rb");
+	if (!f) {
+		MessageBox2(strerror(errno), "Import SONG_DATA", MB_ICONEXCLAMATION);
+		return;
+	}
+
+	// Read entire BIN file
+	fseek(f, 0, SEEK_END);
+	long file_size = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	BYTE *bin_data = malloc(file_size);
+	fread(bin_data, file_size, 1, f);
+	fclose(f);
+
+	// write into ARAM at addr
+	memcpy(spc+dstMusic, bin_data, file_size);
+
+	free_song(&cur_song);
+	decompile_song(&cur_song, dstMusic, 0xFFFF);
+
+	initialize_state();
+	cur_song.changed = TRUE;
+	save_cur_song_to_pack();
+
+}
+
 static void export_starfox_bin(WORD dstMusic) {
 	// compile_song corrupts the spc and any potential samples/instruments, so we need to make a copy first...
 	BYTE *spc_copy = malloc(0x10000 * sizeof(*spc_copy));
@@ -666,6 +699,35 @@ INT_PTR CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 			GetDlgItemText(hWnd, IDC_CUSTOM_ADDRESS, inputAddressStr, 5);
 			if (!arg2word(inputAddressStr)){
 				export_starfox_bin(customAddress);
+			} else {
+				MessageBox(NULL, "Address must be 4 hex characters or less.\nExample: E000", "ERROR", MB_OK | MB_ICONERROR);
+				break;
+			}
+			__attribute__((fallthrough));
+		case IDCANCEL:
+			EndDialog(hWnd, LOWORD(wParam));
+			break;
+		}
+	default: return FALSE;
+	}
+	return TRUE;
+}
+
+INT_PTR CALLBACK ImportAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	(void)lParam;
+	switch (uMsg) {
+	case WM_INITDIALOG:
+		// limit input to 4 chars
+		SendMessage(GetDlgItem(hWnd, IDC_CUSTOM_ADDRESS), EM_SETLIMITTEXT, 4, 0);
+		SetDlgItemText(hWnd, IDC_CUSTOM_ADDRESS, "E000");
+		break;
+	case WM_COMMAND:
+		switch (LOWORD(wParam)) {
+		case IDOK:
+			char inputAddressStr[5];
+			GetDlgItemText(hWnd, IDC_CUSTOM_ADDRESS, inputAddressStr, 5);
+			if (!arg2word(inputAddressStr)){
+				load_song_data(customAddress);
 			} else {
 				MessageBox(NULL, "Address must be 4 hex characters or less.\nExample: E000", "ERROR", MB_OK | MB_ICONERROR);
 				break;
@@ -944,6 +1006,10 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case ID_EXPORT_STARFOX_BIN_EC20: export_starfox_bin(0xEC20); break;
 		case ID_EXPORT_STARFOX_BIN_F000: export_starfox_bin(0xF000); break;
 		case ID_IMPORT_SBN: import_sbn(); break;
+		case ID_IMPORT_STARFOX_BIN: {
+			DialogBox(hinstance, MAKEINTRESOURCE(IDD_STARFOX_BIN_IMPORT), hWnd, ImportAddressDlgProc);
+			break;
+		}
 		case ID_EXIT: DestroyWindow(hWnd); break;
 		case ID_OPTIONS: {
 			extern INT_PTR CALLBACK OptionsDlgProc(HWND,UINT,WPARAM,LPARAM);

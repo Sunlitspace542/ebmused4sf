@@ -60,7 +60,6 @@ BOOL save_all_packs(void);
 void import_sfm(void);
 void export_sfm(void);
 void import_sbn(void);
-void load_sbn_pack(BYTE *pack_data, int pack_size, int sample_dir_block, int sample_data_block, int inst_table_block, BOOL load_inst_table);
 
 // bgmlist.c
 
@@ -149,6 +148,7 @@ extern struct pack inmem_packs[NUM_PACKS];
 BOOL close_rom(void);
 BOOL open_rom(char *filename, BOOL readonly);
 BOOL open_orig_rom(char *filename);
+void load_sbn_pack(BYTE *pack_data, int pack_size, int sample_dir_block, int sample_data_block, int inst_table_block, BOOL load_inst_table);
 
 // metadata.c
 extern char *bgm_title[NUM_SONGS];
