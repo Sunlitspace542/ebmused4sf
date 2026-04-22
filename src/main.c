@@ -1028,7 +1028,7 @@ void import_sbn() {
 	if (DialogBox(hinstance, MAKEINTRESOURCE(IDD_SBN_IMPORT), hwndMain, SbnImportDlgProc)) {
 		// Dialog succeeded, addresses are set in global variables
 		char *file = open_dialog(GetOpenFileName,
-			"SNES Sound Binary files (*.sbn)\0*.sbn\0SNES Sound Binary files (*.bin)\0*.bin\0All Files\0*.*\0",
+			"SNES Sound Binary (*.sbn;*.bin)\0*.sbn;*.bin\0All Files\0*.*\0\0",
 			NULL, NULL, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY);
 		if (!file) return;
 
