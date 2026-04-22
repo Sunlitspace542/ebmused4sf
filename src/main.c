@@ -403,6 +403,70 @@ enum SPC_RESULTS try_parse_spc(const BYTE* spc, struct spcDetails *out_details) 
 	return results;
 }
 
+static void new_song() {
+	// Load blank SPC file.
+	HRSRC res = FindResource(hinstance, MAKEINTRESOURCE(IDRC_SPCTEMPLATE), RT_RCDATA);
+	HGLOBAL res_handle = res ? LoadResource(NULL, res) : NULL;
+
+	// Backup the currently loaded SPC in case we need to restore it upon an error.
+	// This can be updated once methods like decode_samples don't rely on the global "spc" variable.
+	BYTE backup_spc[0x10000];
+	memcpy(backup_spc, spc, 0x10000);
+	WORD original_sample_ptr_base = sample_ptr_base;
+
+	BYTE dsp[0x80];
+
+	if (res_handle) {
+		BYTE* res_data = (BYTE*)LockResource(res_handle)+0x100; // skip header page
+		DWORD spc_size = SizeofResource(NULL, res);
+
+		memcpy(spc, res_data, 0x10000);
+		memcpy(dsp, res_data+0x10000, 0x80);
+
+		sample_ptr_base = dsp[0x5D] << 8;
+		free_samples();
+		decode_samples(&spc[sample_ptr_base]);
+
+		struct spcDetails details;
+		enum SPC_RESULTS results = try_parse_spc(spc, &details);
+		printf("%s\n", filename);
+		if (results) {
+			if (results & HAS_INSTRUMENTS) {
+				printf("Inst Prms: %#X\n", details.instrument_table_addr);
+				inst_base = details.instrument_table_addr;
+			}
+			if (results & HAS_MUSIC) {
+				printf("Song Tabl: %#X\n", details.music_table_addr);
+				//printf("Music index found: %#X\n", details.music_index);
+				printf("Song Data: %#X\n\n", details.music_addr);
+
+				free_song(&cur_song);
+				decompile_song(&cur_song, details.music_addr, 0xffff);
+			}
+			initialize_state();
+			cur_song.changed = TRUE;
+			save_cur_song_to_pack();
+			SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
+
+			enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
+			spcImported = 1;
+		} else {
+			// Restore SPC state and samples
+			memcpy(spc, backup_spc, 0x10000);
+			sample_ptr_base = original_sample_ptr_base;
+			free_samples();
+			decode_samples(&spc[sample_ptr_base]);
+
+			MessageBox2("Could not parse SPC.", "SPC Import", MB_ICONEXCLAMATION);
+		}
+	} else {
+		// Restore SPC state
+		memcpy(spc, backup_spc, 0x10000);
+
+		MessageBox2("Template SPC could not be loaded", "Export SPC", MB_ICONEXCLAMATION);
+	}
+	}
+
 static void import_spc() {
 	char *file = open_dialog(GetOpenFileName,
 		"SPC Savestates (*.spc)\0*.spc\0All Files\0*.*\0",
@@ -477,6 +541,7 @@ static void import_spc() {
 
 	fclose(f);
 }
+
 
 static void export() {
 	struct block *b = save_cur_song_to_pack();
@@ -784,6 +849,31 @@ static BOOL validate_playable(void) {
 	}
 }
 
+
+void confirmClearSong() {
+    int msgboxID = MessageBox(
+        NULL,
+        (LPCSTR)"You have a song loaded!\nAre you sure you want to erase it?",
+        (LPCSTR)"Warning",
+        MB_ICONWARNING | MB_YESNOCANCEL | MB_DEFBUTTON1
+    );
+
+    switch (msgboxID)
+    {
+    case IDCANCEL:
+        return;
+        break;
+    case IDYES:
+        new_song();
+        break;
+    case IDNO:
+        return;
+        break;
+    }
+
+    return;
+}
+
 LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case MM_WOM_OPEN: case MM_WOM_CLOSE: case MM_WOM_DONE:
@@ -813,6 +903,14 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case WM_COMMAND: {
 		WORD id = LOWORD(wParam);
 		switch (id) {
+		case ID_NEW: {
+			if (cur_song.order_length != 0) {
+				confirmClearSong();
+			} else {
+				new_song();
+			}
+			break;
+		}
 		case ID_OPEN: {
 			char *file = open_dialog(GetOpenFileName,
 				"SNES ROM files (*.smc, *.sfc)\0*.smc;*.sfc\0All Files\0*.*\0",
