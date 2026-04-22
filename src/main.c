@@ -78,6 +78,11 @@ HWND hwndStatus;
 HMENU hmenu, hcontextmenu;
 HWND tab_hwnd[NUM_TABS];
 
+// SBN import addresses
+WORD sbn_sample_dir_addr = 0x3C00;
+WORD sbn_sample_data_addr = 0x4000; 
+WORD sbn_inst_table_addr = 0x3D00;
+
 static const int INST_TAB = 1;
 static int current_tab;
 static const char *const tab_class[NUM_TABS] = {
@@ -839,6 +844,7 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case ID_EXPORT_STARFOX_BIN_E600: export_starfox_bin(0xE600); break;
 		case ID_EXPORT_STARFOX_BIN_EC20: export_starfox_bin(0xEC20); break;
 		case ID_EXPORT_STARFOX_BIN_F000: export_starfox_bin(0xF000); break;
+		case ID_IMPORT_SBN: import_sbn(); break;
 		case ID_EXIT: DestroyWindow(hWnd); break;
 		case ID_OPTIONS: {
 			extern INT_PTR CALLBACK OptionsDlgProc(HWND,UINT,WPARAM,LPARAM);
@@ -967,6 +973,78 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	printf("Unhandled exception\n");
 	return EXCEPTION_EXECUTE_HANDLER;
 }*/
+
+// SBN Import Dialog Procedure
+INT_PTR CALLBACK SbnImportDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	(void)lParam;
+	switch (uMsg) {
+	case WM_INITDIALOG: {
+		char buf[5];
+		sprintf(buf, "%04X", sbn_sample_dir_addr);
+		SetDlgItemText(hWnd, IDC_SAMPLE_DIR_ADDR, buf);
+		sprintf(buf, "%04X", sbn_sample_data_addr);
+		SetDlgItemText(hWnd, IDC_SAMPLE_DATA_ADDR, buf);
+		sprintf(buf, "%04X", sbn_inst_table_addr);
+		SetDlgItemText(hWnd, IDC_INST_TABLE_ADDR, buf);
+		return TRUE;
+	}
+	case WM_COMMAND:
+		switch (LOWORD(wParam)) {
+		case IDOK: {
+			char buf[5];
+			GetDlgItemText(hWnd, IDC_SAMPLE_DIR_ADDR, buf, 5);
+			sbn_sample_dir_addr = (WORD)strtol(buf, NULL, 16);
+			GetDlgItemText(hWnd, IDC_SAMPLE_DATA_ADDR, buf, 5);
+			sbn_sample_data_addr = (WORD)strtol(buf, NULL, 16);
+			GetDlgItemText(hWnd, IDC_INST_TABLE_ADDR, buf, 5);
+			sbn_inst_table_addr = (WORD)strtol(buf, NULL, 16);
+			EndDialog(hWnd, 1);
+			return TRUE;
+		}
+		case IDCANCEL:
+			EndDialog(hWnd, 0);
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
+void import_sbn() {
+	// Show dialog to get addresses
+	extern INT_PTR CALLBACK SbnImportDlgProc(HWND, UINT, WPARAM, LPARAM);
+	if (DialogBox(hinstance, MAKEINTRESOURCE(IDD_SBN_IMPORT), hwndMain, SbnImportDlgProc)) {
+		// Dialog succeeded, addresses are set in global variables
+		char *file = open_dialog(GetOpenFileName,
+			"SNES Sound Binary files (*.sbn)\0*.sbn\0All Files\0*.*\0",
+			NULL, NULL, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY);
+		if (!file) return;
+
+		FILE *f = fopen(file, "rb");
+		if (!f) {
+			MessageBox2(strerror(errno), "Import SBN", MB_ICONEXCLAMATION);
+			return;
+		}
+
+		// Read entire SBN file
+		fseek(f, 0, SEEK_END);
+		long file_size = ftell(f);
+		fseek(f, 0, SEEK_SET);
+		
+		BYTE *sbn_data = malloc(file_size);
+		fread(sbn_data, file_size, 1, f);
+		fclose(f);
+
+		// Parse SBN and extract needed data
+		// For now, just copy the relevant blocks to spc[]
+		load_sbn_pack(sbn_data, file_size, sbn_sample_dir_addr, sbn_inst_table_addr);
+		free(sbn_data);
+
+		// Mark as imported
+		spcImported = 1;
+		SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
+	}
+}
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	LPSTR lpCmdLine, int nCmdShow)
