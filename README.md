@@ -1,10 +1,11 @@
 ## EarthBound Music Editor (but for Star Fox)
-This is a little mod to enable EBMusEd to export Star Fox compatible files.
-The exported SONG_DATA files must then be compiled with asar scripts into SGSOUND.bin files before assembling the game.
+This is a little mod to enable EBMusEd to import/export Star Fox compatible files.
+The exported SONG_DATA files must then be assembled into SGSOUNDx.BIN files before assembling the game.
 
 Thank you to all of the contributors of Earthbound Music Editor, you have enabled us to make custom Star Fox music!
 
-To compile on Linux you need Wine and `wine64-tools` installed.
+Compiles on Windows with MSYS2. (I have not tested standalone MinGW or Visual Studio.)  
+To compile on Linux you need Wine and `wine64-tools` installed for `winegcc` and `wrc`.  
 
 ## Original README
 ## EarthBound Music Editor
