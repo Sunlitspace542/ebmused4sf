@@ -45,6 +45,7 @@ extern struct song_state pattop_state, state;
 extern HINSTANCE hinstance;
 extern HWND hwndMain;
 extern HWND hwndStatus;
+extern BOOL spcImported;
 #ifdef CreateWindow
 extern HMENU hmenu, hcontextmenu;
 #endif
@@ -56,6 +57,7 @@ extern HWND tab_hwnd[NUM_TABS];
 #define hwndPackList tab_hwnd[3]
 BOOL get_original_rom(void);
 BOOL save_all_packs(void);
+void import_sbn(void);
 
 // bgmlist.c
 
@@ -144,6 +146,7 @@ extern struct pack inmem_packs[NUM_PACKS];
 BOOL close_rom(void);
 BOOL open_rom(char *filename, BOOL readonly);
 BOOL open_orig_rom(char *filename);
+void load_sbn_pack(BYTE *pack_data, int pack_size, int sample_dir_block, int sample_data_block, int inst_table_block, BOOL load_inst_table);
 
 // metadata.c
 extern char *bgm_title[NUM_SONGS];

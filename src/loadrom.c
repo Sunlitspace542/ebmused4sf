@@ -3,6 +3,7 @@
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "ebmusv2.h"
@@ -198,4 +199,67 @@ bad_pointer:
 		return FALSE;
 	}
 	return TRUE;
+}
+
+// SBN pack loading - parses SBN blocks and loads instrument data
+void load_sbn_pack(BYTE *pack_data, int pack_size, int sample_dir_block, int sample_data_block, int inst_table_block, BOOL load_inst_table) {
+	// Clear any existing samples
+	free_samples();
+	
+	// Set default addresses based on standard layout
+	sample_ptr_base = 0x3C00;
+	inst_base = 0x3D00;
+	
+	// Parse SBN blocks from pack_data
+	int offset = 0;
+	int block_num = 0;
+	while (offset < pack_size - 4) {  // Need at least 4 bytes for block header + end marker
+		WORD block_size = pack_data[offset] | (pack_data[offset + 1] << 8);
+		WORD block_addr = pack_data[offset + 2] | (pack_data[offset + 3] << 8);
+		
+		// Check for end marker
+		if (block_size == 0 && block_addr == 0) break;
+		
+		offset += 4;  // Skip header
+		
+		// Process blocks by block number instead of address matching
+		if (block_num == sample_dir_block) {
+			// This is the sample directory (pointers to BRR samples)
+			if (block_size <= 0x200 && block_addr + block_size <= 0x10000) {  // Reasonable limit
+				memcpy(&spc[block_addr], &pack_data[offset], block_size);
+				printf("Loaded sample directory (block %d) at 0x%04X (%d bytes)\n", block_num, block_addr, block_size);
+			}
+		} else if (block_num == sample_data_block) {
+			// This is the sample data (BRR samples)
+			if (block_addr + block_size <= 0x10000) {
+				memcpy(&spc[block_addr], &pack_data[offset], block_size);
+				printf("Loaded sample data (block %d) at 0x%04X (%d bytes)\n", block_num, block_addr, block_size);
+			}
+		} else if (load_inst_table && block_num == inst_table_block) {
+			// This is the instrument table (ADSR, gain, tuning) - optional
+			if (block_size <= 0x300 && block_addr + block_size <= 0x10000) {  // Reasonable limit for 128 instruments
+				memcpy(&spc[block_addr], &pack_data[offset], block_size);
+				printf("Loaded instrument table (block %d) at 0x%04X (%d bytes)\n", block_num, block_addr, block_size);
+			}
+		} else {
+			// For other blocks, still load them to support chaining of SBN files
+			// with different data sections (e.g., sample directory in one file, samples in another)
+			if (block_addr + block_size <= 0x10000) {
+				memcpy(&spc[block_addr], &pack_data[offset], block_size);
+				printf("Loaded data block %d at 0x%04X (%d bytes)\n", block_num, block_addr, block_size);
+			}
+		}
+		
+		offset += block_size;
+		block_num++;
+	}
+	
+	// Decode samples from the loaded data
+	decode_samples(&spc[sample_ptr_base]);
+	
+	// Mark as imported (not from ROM)
+	spcImported = 1;
+	
+	printf("SBN pack loaded: sample_dir_block=%d, sample_data_block=%d, inst_table_block=%d (load=%d)\n", 
+		   sample_dir_block, sample_data_block, inst_table_block, load_inst_table);
 }
