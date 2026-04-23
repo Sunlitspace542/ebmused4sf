@@ -993,6 +993,27 @@ void confirmClearSong() {
     return;
 }
 
+void confirmLoadSong() {
+    int msgboxID = MessageBox(
+        NULL,
+        (LPCSTR)"A song is already loaded!\nAre you sure you want to erase it?",
+        (LPCSTR)"Warning",
+        MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON1
+    );
+
+    switch (msgboxID)
+    {
+    case IDYES:
+        import_sfm();
+        break;
+    case IDNO:
+        return;
+        break;
+    }
+
+    return;
+}
+
 LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case MM_WOM_OPEN: case MM_WOM_CLOSE: case MM_WOM_DONE:
@@ -1050,7 +1071,14 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			SendMessage(tab_hwnd[current_tab], WM_ROM_CLOSED, 0, 0);
 			SetWindowText(hWnd, CLI_FILEDESCRIPTION_STR);
 			break;
-		case ID_IMPORT: import_sfm(); break;
+		case ID_IMPORT: {
+			if (cur_song.order_length != 0) {
+				confirmLoadSong();
+			} else {
+				import_sfm();
+			}
+			break;
+		}
 		case ID_IMPORT_SPC: import_spc(); break;
 		case ID_EXPORT: export_sfm(); break;
 		case ID_EXPORT_SPC: export_spc(); break;
