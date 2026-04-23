@@ -78,6 +78,12 @@ HWND hwndStatus;
 HMENU hmenu, hcontextmenu;
 HWND tab_hwnd[NUM_TABS];
 
+// SBN import block numbers
+int sbn_sample_dir_block = 0;
+int sbn_sample_data_block = 1;
+int sbn_inst_table_block = 2;
+BOOL sbn_load_inst_table = TRUE;
+
 static const int INST_TAB = 1;
 static int current_tab;
 static const char *const tab_class[NUM_TABS] = {
@@ -397,6 +403,36 @@ enum SPC_RESULTS try_parse_spc(const BYTE* spc, struct spcDetails *out_details) 
 	return results;
 }
 
+static void new_song() {
+	// Load template SONG_DATA file.
+	HRSRC res = FindResource(hinstance, MAKEINTRESOURCE(IDRC_SONGTEMPLATE), RT_RCDATA);
+	HGLOBAL res_handle = res ? LoadResource(NULL, res) : NULL;
+
+	// Backup the currently loaded SPC in case we need to restore it upon an error.
+	// This can be updated once methods like decode_samples don't rely on the global "spc" variable.
+	BYTE backup_spc[0x10000];
+	memcpy(backup_spc, spc, 0x10000);
+
+	if (res_handle) {
+		BYTE* res_data = (BYTE*)LockResource(res_handle);
+		DWORD bin_size = SizeofResource(NULL, res);
+
+		memcpy(spc+0xE600, res_data, bin_size);
+			free_song(&cur_song);
+			decompile_song(&cur_song, 0xE600, 0xFFFF);
+
+			initialize_state();
+			cur_song.changed = TRUE;
+			save_cur_song_to_pack();
+			SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
+			enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
+	} else {
+		memcpy(spc, backup_spc, 0x10000);
+
+		MessageBox2("Template song could not be loaded", "New Song", MB_ICONEXCLAMATION);
+	}
+	}
+
 static void import_spc() {
 	char *file = open_dialog(GetOpenFileName,
 		"SPC Savestates (*.spc)\0*.spc\0All Files\0*.*\0",
@@ -472,6 +508,7 @@ static void import_spc() {
 	fclose(f);
 }
 
+
 static void export() {
 	struct block *b = save_cur_song_to_pack();
 	if (!b) {
@@ -508,6 +545,133 @@ static void export_spc() {
 	} else {
 		MessageBox2("No song loaded", "Export SPC", MB_ICONEXCLAMATION);
 	}
+}
+
+
+void import_sfm() {
+	char *file = open_dialog(GetOpenFileName,
+		"Star Fox Music files (*.sfm)\0*.sfm\0All Files\0*.*\0\0",
+		NULL, NULL, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY);
+	if (!file) return;
+
+	FILE *f = fopen(file, "rb");
+	if (!f) {
+		MessageBox2(strerror(errno), "Import SFM", MB_ICONEXCLAMATION);
+		return;
+	}
+
+	// Read entire BIN file
+	fseek(f, 0, SEEK_END);
+	long file_size = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	BYTE *bin_data = malloc(file_size);
+	fread(bin_data, file_size, 1, f);
+	fclose(f);
+
+	WORD dstMusic;
+	WORD musicSize;
+
+	memcpy(&dstMusic, bin_data, sizeof(WORD));
+	memcpy(&musicSize, bin_data+2, sizeof(WORD));
+
+	// write into ARAM at addr
+	memcpy(spc+dstMusic, bin_data+4, file_size-4);
+
+	free_song(&cur_song);
+	decompile_song(&cur_song, dstMusic, 0xFFFF);
+
+	initialize_state();
+	cur_song.changed = TRUE;
+	save_cur_song_to_pack();
+	SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
+	enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
+}
+
+
+void load_song_data(WORD dstMusic) {
+	char *file = open_dialog(GetOpenFileName,
+		"Song data (*.bin)\0*.bin\0All Files\0*.*\0\0",
+		NULL, NULL, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY);
+	if (!file) return;
+
+	FILE *f = fopen(file, "rb");
+	if (!f) {
+		MessageBox2(strerror(errno), "Import SONG_DATA", MB_ICONEXCLAMATION);
+		return;
+	}
+
+	// Read entire BIN file
+	fseek(f, 0, SEEK_END);
+	long file_size = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	BYTE *bin_data = malloc(file_size);
+	fread(bin_data, file_size, 1, f);
+	fclose(f);
+
+	// write into ARAM at addr
+	memcpy(spc+dstMusic, bin_data, file_size);
+
+	free_song(&cur_song);
+	decompile_song(&cur_song, dstMusic, 0xFFFF);
+
+	initialize_state();
+	cur_song.changed = TRUE;
+	save_cur_song_to_pack();
+	SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
+	enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
+
+}
+
+static void export_sfm() {
+	// compile_song corrupts the spc and any potential samples/instruments, so we need to make a copy first...
+	BYTE *spc_copy = malloc(0x10000 * sizeof(*spc_copy));
+	memcpy(spc_copy, spc, 0x10000);
+
+	// get size of song data
+	const WORD music_size = compile_song(&cur_song);
+	const WORD dstMusic = cur_song.address;
+	printf("Song start: 0x%X\n", cur_song.address);
+	printf("Song size: %d bytes\n", music_size);
+
+	// check to make sure song doesn't go over 64KB
+	if (dstMusic + music_size > 0xFFFF) {
+		printf("ERROR: Song data too big by %d bytes\n", dstMusic + music_size - 0xFFFF);
+		MessageBox2("Song data overruns 64KB. Must insert at lower memory address.", "SFM export error", MB_ICONEXCLAMATION);
+		memcpy(spc, spc_copy, 0x10000);
+		free(spc_copy);
+		return;
+	}
+
+	char *sfmFileName = open_dialog(GetSaveFileName, "Star Fox Music files (*.sfm)\0*.sfm\0All Files\0*.*\0\0", "sfm", NULL, OFN_OVERWRITEPROMPT);
+	
+	if (!sfmFileName) {
+		printf("No output SFM file selected.\n");
+		return;
+	}
+	printf("%s\n", sfmFileName);
+
+	// recompile song data so the addresses are correct...
+	cur_song.address = dstMusic;
+	compile_song(&cur_song);
+	printf("Recompiled to 0x%X\n", cur_song.address);
+
+	// open output SFM file, save or fail
+	FILE *fpOutput;
+	if ((fpOutput = fopen(sfmFileName, "wb")))	{
+		// write output SFM file and close it
+		fwrite(&dstMusic, 1, sizeof(WORD), fpOutput);
+		fwrite(&music_size, 1, sizeof(WORD), fpOutput);
+		fwrite(&spc[dstMusic], 1, music_size, fpOutput);
+		fclose(fpOutput);
+	} else {
+		printf("ERROR: Cannot open output sfm file \"%s\"\n", sfmFileName);
+		MessageBox2("Cannot open output SFM file.", "SFM export error", MB_ICONEXCLAMATION);
+	}
+
+	memcpy(spc, spc_copy, 0x10000);
+	free(spc_copy);
 }
 
 static void export_starfox_bin(WORD dstMusic) {
@@ -595,6 +759,35 @@ INT_PTR CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 			GetDlgItemText(hWnd, IDC_CUSTOM_ADDRESS, inputAddressStr, 5);
 			if (!arg2word(inputAddressStr)){
 				export_starfox_bin(customAddress);
+			} else {
+				MessageBox(NULL, "Address must be 4 hex characters or less.\nExample: E000", "ERROR", MB_OK | MB_ICONERROR);
+				break;
+			}
+			__attribute__((fallthrough));
+		case IDCANCEL:
+			EndDialog(hWnd, LOWORD(wParam));
+			break;
+		}
+	default: return FALSE;
+	}
+	return TRUE;
+}
+
+INT_PTR CALLBACK ImportAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	(void)lParam;
+	switch (uMsg) {
+	case WM_INITDIALOG:
+		// limit input to 4 chars
+		SendMessage(GetDlgItem(hWnd, IDC_CUSTOM_ADDRESS), EM_SETLIMITTEXT, 4, 0);
+		SetDlgItemText(hWnd, IDC_CUSTOM_ADDRESS, "E000");
+		break;
+	case WM_COMMAND:
+		switch (LOWORD(wParam)) {
+		case IDOK:
+			char inputAddressStr[5];
+			GetDlgItemText(hWnd, IDC_CUSTOM_ADDRESS, inputAddressStr, 5);
+			if (!arg2word(inputAddressStr)){
+				load_song_data(customAddress);
 			} else {
 				MessageBox(NULL, "Address must be 4 hex characters or less.\nExample: E000", "ERROR", MB_OK | MB_ICONERROR);
 				break;
@@ -778,6 +971,49 @@ static BOOL validate_playable(void) {
 	}
 }
 
+
+void confirmClearSong() {
+    int msgboxID = MessageBox(
+        NULL,
+        (LPCSTR)"A song is already loaded!\nAre you sure you want to erase it?",
+        (LPCSTR)"Warning",
+        MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON1
+    );
+
+    switch (msgboxID)
+    {
+    case IDYES:
+        new_song();
+        break;
+    case IDNO:
+        return;
+        break;
+    }
+
+    return;
+}
+
+void confirmLoadSong() {
+    int msgboxID = MessageBox(
+        NULL,
+        (LPCSTR)"A song is already loaded!\nAre you sure you want to erase it?",
+        (LPCSTR)"Warning",
+        MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON1
+    );
+
+    switch (msgboxID)
+    {
+    case IDYES:
+        import_sfm();
+        break;
+    case IDNO:
+        return;
+        break;
+    }
+
+    return;
+}
+
 LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case MM_WOM_OPEN: case MM_WOM_CLOSE: case MM_WOM_DONE:
@@ -807,6 +1043,14 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case WM_COMMAND: {
 		WORD id = LOWORD(wParam);
 		switch (id) {
+		case ID_NEW: {
+			if (cur_song.order_length != 0) {
+				confirmClearSong();
+			} else {
+				new_song();
+			}
+			break;
+		}
 		case ID_OPEN: {
 			char *file = open_dialog(GetOpenFileName,
 				"SNES ROM files (*.smc, *.sfc)\0*.smc;*.sfc\0All Files\0*.*\0",
@@ -827,9 +1071,16 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			SendMessage(tab_hwnd[current_tab], WM_ROM_CLOSED, 0, 0);
 			SetWindowText(hWnd, CLI_FILEDESCRIPTION_STR);
 			break;
-		case ID_IMPORT: import(); break;
+		case ID_IMPORT: {
+			if (cur_song.order_length != 0) {
+				confirmLoadSong();
+			} else {
+				import_sfm();
+			}
+			break;
+		}
 		case ID_IMPORT_SPC: import_spc(); break;
-		case ID_EXPORT: export(); break;
+		case ID_EXPORT: export_sfm(); break;
 		case ID_EXPORT_SPC: export_spc(); break;
 		case ID_EXPORT_STARFOX_BIN_CUSTOM: {
 			DialogBox(hinstance, MAKEINTRESOURCE(IDD_CUSTOM_EXPORT), hWnd, CustomAddressDlgProc);
@@ -839,6 +1090,11 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case ID_EXPORT_STARFOX_BIN_E600: export_starfox_bin(0xE600); break;
 		case ID_EXPORT_STARFOX_BIN_EC20: export_starfox_bin(0xEC20); break;
 		case ID_EXPORT_STARFOX_BIN_F000: export_starfox_bin(0xF000); break;
+		case ID_IMPORT_SBN: import_sbn(); break;
+		case ID_IMPORT_STARFOX_BIN: {
+			DialogBox(hinstance, MAKEINTRESOURCE(IDD_STARFOX_BIN_IMPORT), hWnd, ImportAddressDlgProc);
+			break;
+		}
 		case ID_EXIT: DestroyWindow(hWnd); break;
 		case ID_OPTIONS: {
 			extern INT_PTR CALLBACK OptionsDlgProc(HWND,UINT,WPARAM,LPARAM);
@@ -967,6 +1223,90 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	printf("Unhandled exception\n");
 	return EXCEPTION_EXECUTE_HANDLER;
 }*/
+
+// SBN Import Dialog Procedure
+INT_PTR CALLBACK SbnImportDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	(void)lParam;
+	switch (uMsg) {
+	case WM_INITDIALOG: {
+		char buf[5];
+		sprintf(buf, "%d", sbn_sample_dir_block);
+		SetDlgItemText(hWnd, IDC_SAMPLE_DIR_ADDR, buf);
+		sprintf(buf, "%d", sbn_sample_data_block);
+		SetDlgItemText(hWnd, IDC_SAMPLE_DATA_ADDR, buf);
+		CheckDlgButton(hWnd, IDC_INST_TABLE_ADDR, sbn_load_inst_table ? BST_CHECKED : BST_UNCHECKED);
+		sprintf(buf, "%d", sbn_inst_table_block);
+		SetDlgItemText(hWnd, IDC_INST_TABLE_BLOCK, buf);
+		EnableWindow(GetDlgItem(hWnd, IDC_INST_TABLE_BLOCK), sbn_load_inst_table);
+		return TRUE;
+	}
+	case WM_COMMAND:
+		switch (LOWORD(wParam)) {
+		case IDC_INST_TABLE_ADDR: {
+			// Toggle enable state of block number field
+			BOOL checked = IsDlgButtonChecked(hWnd, IDC_INST_TABLE_ADDR);
+			EnableWindow(GetDlgItem(hWnd, IDC_INST_TABLE_BLOCK), checked);
+			return TRUE;
+		}
+		case IDOK: {
+			char buf[5];
+			GetDlgItemText(hWnd, IDC_SAMPLE_DIR_ADDR, buf, 5);
+			sbn_sample_dir_block = atoi(buf);
+			GetDlgItemText(hWnd, IDC_SAMPLE_DATA_ADDR, buf, 5);
+			sbn_sample_data_block = atoi(buf);
+			sbn_load_inst_table = IsDlgButtonChecked(hWnd, IDC_INST_TABLE_ADDR) == BST_CHECKED;
+			if (sbn_load_inst_table) {
+				GetDlgItemText(hWnd, IDC_INST_TABLE_BLOCK, buf, 5);
+				sbn_inst_table_block = atoi(buf);
+			}
+			EndDialog(hWnd, 1);
+			return TRUE;
+		}
+		case IDCANCEL:
+			EndDialog(hWnd, 0);
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
+void import_sbn() {
+	// Show dialog to get addresses
+	extern INT_PTR CALLBACK SbnImportDlgProc(HWND, UINT, WPARAM, LPARAM);
+	if (DialogBox(hinstance, MAKEINTRESOURCE(IDD_SBN_IMPORT), hwndMain, SbnImportDlgProc)) {
+		// Dialog succeeded, addresses are set in global variables
+		char *file = open_dialog(GetOpenFileName,
+			"SNES Sound Binary (*.sbn;*.bin)\0*.sbn;*.bin\0All Files\0*.*\0\0",
+			NULL, NULL, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY);
+		if (!file) return;
+
+		FILE *f = fopen(file, "rb");
+		if (!f) {
+			MessageBox2(strerror(errno), "Import SBN", MB_ICONEXCLAMATION);
+			return;
+		}
+
+		// Read entire SBN file
+		fseek(f, 0, SEEK_END);
+		long file_size = ftell(f);
+		fseek(f, 0, SEEK_SET);
+		
+		BYTE *sbn_data = malloc(file_size);
+		fread(sbn_data, file_size, 1, f);
+		fclose(f);
+
+		// Parse SBN and extract needed data based on block numbers
+		// For now, just copy the relevant blocks to spc[]
+		load_sbn_pack(sbn_data, file_size, sbn_sample_dir_block, sbn_sample_data_block, 
+		              sbn_inst_table_block, sbn_load_inst_table);
+		free(sbn_data);
+
+		// Mark as imported
+		spcImported = 1;
+		SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
+	}
+}
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	LPSTR lpCmdLine, int nCmdShow)
