@@ -425,7 +425,6 @@ static void new_song() {
 			cur_song.changed = TRUE;
 			save_cur_song_to_pack();
 			SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
-
 			enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
 	} else {
 		memcpy(spc, backup_spc, 0x10000);
@@ -585,8 +584,8 @@ void import_sfm() {
 	initialize_state();
 	cur_song.changed = TRUE;
 	save_cur_song_to_pack();
+	SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
 	enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
-
 }
 
 
@@ -620,6 +619,7 @@ void load_song_data(WORD dstMusic) {
 	initialize_state();
 	cur_song.changed = TRUE;
 	save_cur_song_to_pack();
+	SendMessage(tab_hwnd[current_tab], WM_SONG_IMPORTED, 0, 0);
 	enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
 
 }
