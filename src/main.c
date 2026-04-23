@@ -548,6 +548,48 @@ static void export_spc() {
 	}
 }
 
+
+void import_sfm() {
+	char *file = open_dialog(GetOpenFileName,
+		"Star Fox Music files (*.sfm)\0*.sfm\0All Files\0*.*\0\0",
+		NULL, NULL, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY);
+	if (!file) return;
+
+	FILE *f = fopen(file, "rb");
+	if (!f) {
+		MessageBox2(strerror(errno), "Import SFM", MB_ICONEXCLAMATION);
+		return;
+	}
+
+	// Read entire BIN file
+	fseek(f, 0, SEEK_END);
+	long file_size = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	BYTE *bin_data = malloc(file_size);
+	fread(bin_data, file_size, 1, f);
+	fclose(f);
+
+	WORD dstMusic;
+	WORD musicSize;
+
+	memcpy(&dstMusic, bin_data, sizeof(WORD));
+	memcpy(&musicSize, bin_data+2, sizeof(WORD));
+
+	// write into ARAM at addr
+	memcpy(spc+dstMusic, bin_data+4, file_size-4);
+
+	free_song(&cur_song);
+	decompile_song(&cur_song, dstMusic, 0xFFFF);
+
+	initialize_state();
+	cur_song.changed = TRUE;
+	save_cur_song_to_pack();
+	enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
+
+}
+
+
 void load_song_data(WORD dstMusic) {
 	char *file = open_dialog(GetOpenFileName,
 		"Song data (*.bin)\0*.bin\0All Files\0*.*\0\0",
@@ -580,6 +622,56 @@ void load_song_data(WORD dstMusic) {
 	save_cur_song_to_pack();
 	enable_menu_items(starfox_sound_data_cmds, MF_ENABLED);
 
+}
+
+static void export_sfm() {
+	// compile_song corrupts the spc and any potential samples/instruments, so we need to make a copy first...
+	BYTE *spc_copy = malloc(0x10000 * sizeof(*spc_copy));
+	memcpy(spc_copy, spc, 0x10000);
+
+	// get size of song data
+	const WORD music_size = compile_song(&cur_song);
+	const WORD dstMusic = cur_song.address;
+	printf("Song start: 0x%X\n", cur_song.address);
+	printf("Song size: %d bytes\n", music_size);
+
+	// check to make sure song doesn't go over 64KB
+	if (dstMusic + music_size > 0xFFFF) {
+		printf("ERROR: Song data too big by %d bytes\n", dstMusic + music_size - 0xFFFF);
+		MessageBox2("Song data overruns 64KB. Must insert at lower memory address.", "SFM export error", MB_ICONEXCLAMATION);
+		memcpy(spc, spc_copy, 0x10000);
+		free(spc_copy);
+		return;
+	}
+
+	char *sfmFileName = open_dialog(GetSaveFileName, "Star Fox Music files (*.sfm)\0*.sfm\0All Files\0*.*\0\0", "sfm", NULL, OFN_OVERWRITEPROMPT);
+	
+	if (!sfmFileName) {
+		printf("No output SFM file selected.\n");
+		return;
+	}
+	printf("%s\n", sfmFileName);
+
+	// recompile song data so the addresses are correct...
+	cur_song.address = dstMusic;
+	compile_song(&cur_song);
+	printf("Recompiled to 0x%X\n", cur_song.address);
+
+	// open output SFM file, save or fail
+	FILE *fpOutput;
+	if ((fpOutput = fopen(sfmFileName, "wb")))	{
+		// write output SFM file and close it
+		fwrite(&dstMusic, 1, sizeof(WORD), fpOutput);
+		fwrite(&music_size, 1, sizeof(WORD), fpOutput);
+		fwrite(&spc[dstMusic], 1, music_size, fpOutput);
+		fclose(fpOutput);
+	} else {
+		printf("ERROR: Cannot open output sfm file \"%s\"\n", sfmFileName);
+		MessageBox2("Cannot open output SFM file.", "SFM export error", MB_ICONEXCLAMATION);
+	}
+
+	memcpy(spc, spc_copy, 0x10000);
+	free(spc_copy);
 }
 
 static void export_starfox_bin(WORD dstMusic) {
@@ -883,16 +975,13 @@ static BOOL validate_playable(void) {
 void confirmClearSong() {
     int msgboxID = MessageBox(
         NULL,
-        (LPCSTR)"You have a song loaded!\nAre you sure you want to erase it?",
+        (LPCSTR)"A song is already loaded!\nAre you sure you want to erase it?",
         (LPCSTR)"Warning",
-        MB_ICONWARNING | MB_YESNOCANCEL | MB_DEFBUTTON1
+        MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON1
     );
 
     switch (msgboxID)
     {
-    case IDCANCEL:
-        return;
-        break;
     case IDYES:
         new_song();
         break;
@@ -961,9 +1050,9 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			SendMessage(tab_hwnd[current_tab], WM_ROM_CLOSED, 0, 0);
 			SetWindowText(hWnd, CLI_FILEDESCRIPTION_STR);
 			break;
-		case ID_IMPORT: import(); break;
+		case ID_IMPORT: import_sfm(); break;
 		case ID_IMPORT_SPC: import_spc(); break;
-		case ID_EXPORT: export(); break;
+		case ID_EXPORT: export_sfm(); break;
 		case ID_EXPORT_SPC: export_spc(); break;
 		case ID_EXPORT_STARFOX_BIN_CUSTOM: {
 			DialogBox(hinstance, MAKEINTRESOURCE(IDD_CUSTOM_EXPORT), hWnd, CustomAddressDlgProc);

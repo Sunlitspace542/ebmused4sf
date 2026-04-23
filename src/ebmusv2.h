@@ -57,8 +57,6 @@ extern HWND tab_hwnd[NUM_TABS];
 #define hwndPackList tab_hwnd[3]
 BOOL get_original_rom(void);
 BOOL save_all_packs(void);
-void import_sfm(void);
-void export_sfm(void);
 void import_sbn(void);
 
 // bgmlist.c
