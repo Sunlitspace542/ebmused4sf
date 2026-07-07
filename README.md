@@ -1,6 +1,6 @@
 ## EarthBound Music Editor (but for Star Fox)
 This is a little mod to enable EBMusEd to import/export Star Fox compatible files.
-The exported SONG_DATA files must then be assembled into SGSOUNDx.BIN files before assembling the game.
+The exported SONG_DATA files must then be assembled into SGSOUNDx.BIN files before assembling the game (see [here](https://github.com/Sunlitspace542/star-fox-sound-bins/)).
 
 Thank you to all of the contributors of Earthbound Music Editor, you have enabled us to make custom Star Fox music!
 

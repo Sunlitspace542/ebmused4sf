@@ -18,6 +18,7 @@
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <commdlg.h>
@@ -83,6 +84,20 @@ int sbn_sample_dir_block = 0;
 int sbn_sample_data_block = 1;
 int sbn_inst_table_block = 2;
 BOOL sbn_load_inst_table = TRUE;
+
+// Time
+time_t raw_time;
+struct tm time_info;
+
+// ID666 tag strings
+char spc_dumper_name[17] = "EBMusEd4SF"; // Name of dumper
+char spc_song_len_sec[4] = "180"; // Length (3 minutes)
+char spc_fade_ms[6] = "4000"; // Fade out time (4sec)
+char spc_song_title[33] = "EBMusEd4SF Export"; // Title of song
+char spc_game_title[33] = "Game Name"; // Title of game
+char spc_artist_name[33] = "Artist Name"; // Name of artist
+char spc_date[11]; // Date dumped (MM/DD/YY)
+char spc_comment[33] = "Exported from EBMusEd4SF"; // Comment
 
 static const int INST_TAB = 1;
 static int current_tab;
@@ -531,6 +546,7 @@ static void export() {
 
 static void write_spc(FILE *f);
 static void export_spc() {
+	// TODO add function for inserting ID666 metadata from dialog
 	if (cur_song.order_length > 0) {
 		char *file = open_dialog(GetSaveFileName, "SPC files (*.spc)\0*.spc\0", "spc", NULL, OFN_OVERWRITEPROMPT);
 		if (file) {
@@ -927,6 +943,34 @@ static void write_spc(FILE *f) {
 			// Update sample address high byte
 			new_spc[SPC_HEADER_SIZE + 0x1005D] = dstSamplePointers >> 8; // DSP
 			new_spc[SPC_HEADER_SIZE + 0x52A] = dstSamplePointers >> 8; // Loader (for good measure)
+
+			// Write ID666 tags
+			// Name of song
+			strncpy(&new_spc[0x2E],spc_song_title,32);
+
+			// Name of game
+			strncpy(&new_spc[0x4E],spc_game_title,32);
+
+			// Name of dumper
+			strncpy(&new_spc[0x6E],spc_dumper_name,16);
+
+			// Comment
+			strncpy(&new_spc[0x7E],spc_comment,32);
+
+			// Date dumped (MM/DD/YYYY)
+			time(&raw_time);
+			localtime_s(&time_info, &raw_time);
+			strftime(spc_date, sizeof(spc_date), "%m/%d/%Y", &time_info);
+			strncpy(&new_spc[0x9E],spc_date,10);
+
+			// Song length
+			strncpy(&new_spc[0xA9],spc_song_len_sec,3);
+
+			// Fade length
+			strncpy(&new_spc[0xAC],spc_fade_ms,5);
+
+			// Name of artist
+			strncpy(&new_spc[0xB1],spc_artist_name,32);
 		}
 
 		// Save byte array to file
