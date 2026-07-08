@@ -93,9 +93,9 @@ struct tm time_info;
 char spc_dumper_name[17] = "EBMusEd4SF"; // Name of dumper
 char spc_song_len_sec[4] = "180"; // Length (3 minutes)
 char spc_fade_ms[6] = "4000"; // Fade out time (4sec)
-char spc_song_title[33] = "EBMusEd4SF Export"; // Title of song
-char spc_game_title[33] = "Game Name"; // Title of game
-char spc_artist_name[33] = "Artist Name"; // Name of artist
+char spc_song_title[33]; // Title of song
+char spc_game_title[33]; // Title of game
+char spc_artist_name[33]; // Name of artist
 char spc_date[11]; // Date dumped (MM/DD/YY)
 char spc_comment[33] = "Exported from EBMusEd4SF"; // Comment
 
@@ -546,16 +546,19 @@ static void export() {
 
 static void write_spc(FILE *f);
 static void export_spc() {
-	// TODO add function for inserting ID666 metadata from dialog
+extern INT_PTR CALLBACK ID666TagDlgProc(HWND, UINT, WPARAM, LPARAM);
 	if (cur_song.order_length > 0) {
-		char *file = open_dialog(GetSaveFileName, "SPC files (*.spc)\0*.spc\0", "spc", NULL, OFN_OVERWRITEPROMPT);
-		if (file) {
-			FILE *f = fopen(file, "wb");
-			if (f) {
-				write_spc(f);
-				fclose(f);
-			} else {
-				MessageBox2(strerror(errno), "Export SPC", MB_ICONEXCLAMATION);
+		INT_PTR result = DialogBox(hinstance, MAKEINTRESOURCE(IDD_ID666_TAGS), hwndMain, ID666TagDlgProc);
+		if (result == IDOK) {
+			char *file = open_dialog(GetSaveFileName, "SPC files (*.spc)\0*.spc\0", "spc", NULL, OFN_OVERWRITEPROMPT);
+			if (file) {
+				FILE *f = fopen(file, "wb");
+				if (f) {
+					write_spc(f);
+					fclose(f);
+				} else {
+					MessageBox2(strerror(errno), "Export SPC", MB_ICONEXCLAMATION);
+				}
 			}
 		}
 	} else {
@@ -641,53 +644,57 @@ void load_song_data(WORD dstMusic) {
 }
 
 static void export_sfm() {
-	// compile_song corrupts the spc and any potential samples/instruments, so we need to make a copy first...
-	BYTE *spc_copy = malloc(0x10000 * sizeof(*spc_copy));
-	memcpy(spc_copy, spc, 0x10000);
+	if (cur_song.order_length > 0) {
+		// compile_song corrupts the spc and any potential samples/instruments, so we need to make a copy first...
+		BYTE *spc_copy = malloc(0x10000 * sizeof(*spc_copy));
+		memcpy(spc_copy, spc, 0x10000);
 
-	// get size of song data
-	const WORD music_size = compile_song(&cur_song);
-	const WORD dstMusic = cur_song.address;
-	printf("Song start: 0x%X\n", cur_song.address);
-	printf("Song size: %d bytes\n", music_size);
+		// get size of song data
+		const WORD music_size = compile_song(&cur_song);
+		const WORD dstMusic = cur_song.address;
+		printf("Song start: 0x%X\n", cur_song.address);
+		printf("Song size: %d bytes\n", music_size);
 
-	// check to make sure song doesn't go over 64KB
-	if (dstMusic + music_size > 0xFFFF) {
-		printf("ERROR: Song data too big by %d bytes\n", dstMusic + music_size - 0xFFFF);
-		MessageBox2("Song data overruns 64KB. Must insert at lower memory address.", "SFM export error", MB_ICONEXCLAMATION);
+		// check to make sure song doesn't go over 64KB
+		if (dstMusic + music_size > 0xFFFF) {
+			printf("ERROR: Song data too big by %d bytes\n", dstMusic + music_size - 0xFFFF);
+			MessageBox2("Song data overruns 64KB. Must insert at lower memory address.", "SFM export error", MB_ICONEXCLAMATION);
+			memcpy(spc, spc_copy, 0x10000);
+			free(spc_copy);
+			return;
+		}
+
+		char *sfmFileName = open_dialog(GetSaveFileName, "Star Fox Music files (*.sfm)\0*.sfm\0All Files\0*.*\0\0", "sfm", NULL, OFN_OVERWRITEPROMPT);
+		
+		if (!sfmFileName) {
+			printf("No output SFM file selected.\n");
+			return;
+		}
+		printf("%s\n", sfmFileName);
+
+		// recompile song data so the addresses are correct...
+		cur_song.address = dstMusic;
+		compile_song(&cur_song);
+		printf("Recompiled to 0x%X\n", cur_song.address);
+
+		// open output SFM file, save or fail
+		FILE *fpOutput;
+		if ((fpOutput = fopen(sfmFileName, "wb")))	{
+			// write output SFM file and close it
+			fwrite(&dstMusic, 1, sizeof(WORD), fpOutput);
+			fwrite(&music_size, 1, sizeof(WORD), fpOutput);
+			fwrite(&spc[dstMusic], 1, music_size, fpOutput);
+			fclose(fpOutput);
+		} else {
+			printf("ERROR: Cannot open output sfm file \"%s\"\n", sfmFileName);
+			MessageBox2("Cannot open output SFM file.", "SFM export error", MB_ICONEXCLAMATION);
+		}
+
 		memcpy(spc, spc_copy, 0x10000);
 		free(spc_copy);
-		return;
-	}
-
-	char *sfmFileName = open_dialog(GetSaveFileName, "Star Fox Music files (*.sfm)\0*.sfm\0All Files\0*.*\0\0", "sfm", NULL, OFN_OVERWRITEPROMPT);
-	
-	if (!sfmFileName) {
-		printf("No output SFM file selected.\n");
-		return;
-	}
-	printf("%s\n", sfmFileName);
-
-	// recompile song data so the addresses are correct...
-	cur_song.address = dstMusic;
-	compile_song(&cur_song);
-	printf("Recompiled to 0x%X\n", cur_song.address);
-
-	// open output SFM file, save or fail
-	FILE *fpOutput;
-	if ((fpOutput = fopen(sfmFileName, "wb")))	{
-		// write output SFM file and close it
-		fwrite(&dstMusic, 1, sizeof(WORD), fpOutput);
-		fwrite(&music_size, 1, sizeof(WORD), fpOutput);
-		fwrite(&spc[dstMusic], 1, music_size, fpOutput);
-		fclose(fpOutput);
 	} else {
-		printf("ERROR: Cannot open output sfm file \"%s\"\n", sfmFileName);
-		MessageBox2("Cannot open output SFM file.", "SFM export error", MB_ICONEXCLAMATION);
+		MessageBox2("No song loaded", "Play", MB_ICONEXCLAMATION);
 	}
-
-	memcpy(spc, spc_copy, 0x10000);
-	free(spc_copy);
 }
 
 static void export_starfox_bin(WORD dstMusic) {
@@ -1311,6 +1318,48 @@ INT_PTR CALLBACK SbnImportDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
 			return TRUE;
 		}
 		break;
+	}
+	return FALSE;
+}
+
+INT_PTR CALLBACK ID666TagDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	(void)lParam;
+	switch (uMsg) {
+	case WM_INITDIALOG:
+		// limit input to 32 chars
+		SendMessage(GetDlgItem(hWnd, IDC_SPC_SONG_TITLE), EM_SETLIMITTEXT, 32, 0);
+		SetDlgItemText(hWnd, IDC_SPC_SONG_TITLE, "EBMusEd4SF Export");
+		SendMessage(GetDlgItem(hWnd, IDC_SPC_ARTIST_NAME), EM_SETLIMITTEXT, 32, 0);
+		SetDlgItemText(hWnd, IDC_SPC_ARTIST_NAME, "[Artist]");
+		SendMessage(GetDlgItem(hWnd, IDC_SPC_GAME_TITLE), EM_SETLIMITTEXT, 32, 0);
+		SetDlgItemText(hWnd, IDC_SPC_GAME_TITLE, "[Game]");
+		return TRUE;
+	case WM_COMMAND:
+		switch (LOWORD(wParam))
+		{
+		case IDOK:
+		{
+			char song[256];
+			char game[256];
+			char artist[256];
+
+			GetDlgItemText(hWnd, IDC_SPC_SONG_TITLE,song, sizeof(song));
+			GetDlgItemText(hWnd, IDC_SPC_ARTIST_NAME,artist, sizeof(artist));
+			GetDlgItemText(hWnd, IDC_SPC_GAME_TITLE,game, sizeof(game));
+
+			strncpy(spc_song_title,song,32);
+			strncpy(spc_artist_name,artist,32);
+			strncpy(spc_game_title,game,32);
+
+			EndDialog(hWnd, IDOK);
+			return TRUE;
+		}
+
+		case IDCANCEL:
+			EndDialog(hWnd, IDCANCEL);
+			return TRUE;
+		}
+	break;
 	}
 	return FALSE;
 }
