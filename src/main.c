@@ -91,8 +91,8 @@ struct tm time_info;
 
 // ID666 tag strings
 char spc_dumper_name[17] = "EBMusEd4SF"; // Name of dumper
-char spc_song_len_sec[4] = "180"; // Length (3 minutes)
-char spc_fade_ms[6] = "4000"; // Fade out time (4sec)
+char spc_song_len_sec[4]; // Length (3 minutes)
+char spc_fade_ms[6]; // Fade out time (4sec)
 char spc_song_title[33]; // Title of song
 char spc_game_title[33]; // Title of game
 char spc_artist_name[33]; // Name of artist
@@ -1333,6 +1333,10 @@ INT_PTR CALLBACK ID666TagDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		SetDlgItemText(hWnd, IDC_SPC_ARTIST_NAME, "[Artist]");
 		SendMessage(GetDlgItem(hWnd, IDC_SPC_GAME_TITLE), EM_SETLIMITTEXT, 32, 0);
 		SetDlgItemText(hWnd, IDC_SPC_GAME_TITLE, "[Game]");
+		SendMessage(GetDlgItem(hWnd, IDC_SPC_LENGTH_SECONDS), EM_SETLIMITTEXT, 3, 0);
+		SetDlgItemText(hWnd, IDC_SPC_LENGTH_SECONDS, "180");
+		SendMessage(GetDlgItem(hWnd, IDC_SPC_FADE_MS), EM_SETLIMITTEXT, 5, 0);
+		SetDlgItemText(hWnd, IDC_SPC_FADE_MS, "4000");
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam))
@@ -1342,14 +1346,20 @@ INT_PTR CALLBACK ID666TagDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			char song[256];
 			char game[256];
 			char artist[256];
+			char songlen[256];
+			char fadelen[256];
 
 			GetDlgItemText(hWnd, IDC_SPC_SONG_TITLE,song, sizeof(song));
 			GetDlgItemText(hWnd, IDC_SPC_ARTIST_NAME,artist, sizeof(artist));
 			GetDlgItemText(hWnd, IDC_SPC_GAME_TITLE,game, sizeof(game));
+			GetDlgItemText(hWnd, IDC_SPC_LENGTH_SECONDS,songlen, sizeof(songlen));
+			GetDlgItemText(hWnd, IDC_SPC_FADE_MS,fadelen, sizeof(fadelen));
 
 			strncpy(spc_song_title,song,32);
 			strncpy(spc_artist_name,artist,32);
 			strncpy(spc_game_title,game,32);
+			strncpy(spc_song_len_sec,songlen,3);
+			strncpy(spc_fade_ms,fadelen,5);
 
 			EndDialog(hWnd, IDOK);
 			return TRUE;
