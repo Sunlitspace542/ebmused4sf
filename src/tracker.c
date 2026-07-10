@@ -256,7 +256,7 @@ BOOL CALLBACK TransposeDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 		break;
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK)
-			EndDialog(hWnd, GetDlgItemInt(hWnd, 3, NULL, TRUE));
+			EndDialog(hWnd, GetDlgItemInt(hWnd, IDC_TRANSPOSE_OFF, NULL, TRUE));
 		else if (LOWORD(wParam) == IDCANCEL)
 			EndDialog(hWnd, 0);
 		break;

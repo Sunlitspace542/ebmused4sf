@@ -7,6 +7,10 @@ Thank you to all of the contributors of Earthbound Music Editor, you have enable
 Compiles on Windows with MSYS2. (I have not tested standalone MinGW or Visual Studio.)  
 To compile on Linux you need Wine and `wine64-tools` installed for `winegcc` and `wrc`.  
 
+## TODO/Ideas
+- Command line parameter for recompiling song data to another address maybe (useful for me!)?
+- Possibly rework SBN import dialog again?
+
 ## Original README
 ## EarthBound Music Editor
 EBMusEd is a ROM hacking tool for editing and playing back EarthBound's N-SPC sequence data.
