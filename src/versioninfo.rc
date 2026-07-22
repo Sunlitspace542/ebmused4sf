@@ -39,7 +39,7 @@ BEGIN
 			VALUE "FileDescription",	CLI_FILEDESCRIPTION_STR					// *required
 			VALUE "FileVersion",		VER_FILEVERSION_STR						// *required
 			VALUE "InternalName",		"ebmused4sf"							// *required
-			VALUE "LegalCopyright",		"Copyright 2022 phonymike"				//  optional
+			VALUE "LegalCopyright",		"(c) 2022 Phonymike, 2026 Sunlit"		//  optional
 			VALUE "LegalTrademarks",	"Star Fox EX"							//  optional
 			VALUE "OriginalFilename",	"ebmused4sf.exe"						// *required
 			VALUE "ProductName",		"SFES"									// *required

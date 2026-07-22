@@ -769,6 +769,7 @@ WORD arg2word(char * input) {
 
 INT_PTR CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	(void)lParam;
+	char inputAddressStr[5];
 	switch (uMsg) {
 	case WM_INITDIALOG:
 		// limit input to 4 chars
@@ -778,7 +779,6 @@ INT_PTR CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 		case IDOK:
-			char inputAddressStr[5];
 			GetDlgItemText(hWnd, IDC_CUSTOM_ADDRESS, inputAddressStr, 5);
 			if (!arg2word(inputAddressStr)){
 				export_starfox_bin(customAddress);
@@ -786,7 +786,9 @@ INT_PTR CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 				MessageBox(NULL, "Address must be 4 hex characters or less.\nExample: E000", "ERROR", MB_OK | MB_ICONERROR);
 				break;
 			}
+			#ifndef _MSC_VER
 			__attribute__((fallthrough));
+			#endif
 		case IDCANCEL:
 			EndDialog(hWnd, LOWORD(wParam));
 			break;
@@ -798,6 +800,7 @@ INT_PTR CALLBACK CustomAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 
 INT_PTR CALLBACK ImportAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	(void)lParam;
+	char inputAddressStr[5];
 	switch (uMsg) {
 	case WM_INITDIALOG:
 		// limit input to 4 chars
@@ -807,7 +810,6 @@ INT_PTR CALLBACK ImportAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 		case IDOK:
-			char inputAddressStr[5];
 			GetDlgItemText(hWnd, IDC_CUSTOM_ADDRESS, inputAddressStr, 5);
 			if (!arg2word(inputAddressStr)){
 				load_song_data(customAddress);
@@ -815,7 +817,9 @@ INT_PTR CALLBACK ImportAddressDlgProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARA
 				MessageBox(NULL, "Address must be 4 hex characters or less.\nExample: E000", "ERROR", MB_OK | MB_ICONERROR);
 				break;
 			}
+			#ifndef _MSC_VER
 			__attribute__((fallthrough));
+			#endif
 		case IDCANCEL:
 			EndDialog(hWnd, LOWORD(wParam));
 			break;

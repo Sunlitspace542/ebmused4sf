@@ -229,7 +229,7 @@ BOOL open_orig_rom(char *filename) {
 	orig_rom = f;
 	orig_rom_offset = size & 0x200;
 	free(orig_rom_filename);
-	orig_rom_filename = strdup(filename);
+	orig_rom_filename = _strdup(filename);
 	return TRUE;
 }
 
@@ -269,7 +269,7 @@ void load_metadata() {
 			unsigned int bgm;
 			fscanf(mf, "%X %" MAX_TITLE_LEN_STR "[^\n]", &bgm, buf);
 			if (--bgm < NUM_SONGS)
-				bgm_title[bgm] = strdup(buf);
+				bgm_title[bgm] = _strdup(buf);
 			while ((c = fgetc(mf)) >= 0 && c != '\n');
 		} else {
 			printf("unrecognized metadata line %c\n", c);

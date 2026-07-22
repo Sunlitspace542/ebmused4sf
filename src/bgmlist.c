@@ -8,7 +8,7 @@
 #include "id.h"
 
 #ifdef LINUX
-#define strlwr strlwr_nix
+#define _strlwr strlwr_nix
 static char *strlwr_nix(char *str) {
     for (char *p = str; *p; p++) *p = tolower(*p);
     return str;
@@ -164,11 +164,11 @@ static void song_search() {
 	int num = strtol(str, &endhex, 16) - 1;
 	if (*endhex != '\0' || num < 0 || num >= NUM_SONGS) {
 		num = selected_bgm;
-		strlwr(str);
+		_strlwr(str);
 		do {
 			char title[MAX_TITLE_LEN+1];
 			if (++num == NUM_SONGS) num = 0;
-			if (strstr(strlwr(strcpy(title, bgm_title[num])), str))
+			if (strstr(_strlwr(strcpy(title, bgm_title[num])), str))
 				break;
 		} while (num != selected_bgm);
 	}
@@ -234,7 +234,7 @@ LRESULT CALLBACK BGMListWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 			if (bgm_title[selected_bgm] != bgm_orig_title[selected_bgm])
 				free(bgm_title[selected_bgm]);
 			GetDlgItemText(hWnd, IDC_TITLE, buf+4, MAX_TITLE_LEN+1);
-			bgm_title[selected_bgm] = strdup(buf+4);
+			bgm_title[selected_bgm] = _strdup(buf+4);
 			sprintf(buf, "%02X:", selected_bgm + 1);
 			buf[3] = ' ';
 			SendDlgItemMessage(hWnd, IDC_LIST, LB_DELETESTRING, selected_bgm, 0);

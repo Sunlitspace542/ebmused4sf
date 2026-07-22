@@ -121,7 +121,7 @@ BOOL open_rom(char *filename, BOOL readonly) {
 		return FALSE;
 	}
 	rom = f;
-	rom_filename = strdup(filename);
+	rom_filename = _strdup(filename);
 	enable_menu_items(rom_menu_cmds, MF_ENABLED);
 
 	init_areas();

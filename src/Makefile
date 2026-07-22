@@ -40,7 +40,7 @@ $(DEBUG_O_DIR)/%.o: %.c | $(DEBUG_O_DIR)
 	$(CC) $(DEBUG_FLAGS) -c $< -o $@
 
 %/$(OBJ_DIR)/resource.o: resource.rc
-	$(RC) $< -o $@
+	$(RC) -DNOT_MSVC_RC $< -o $@
 
 %/$(OBJ_DIR):
 	mkdir -p $(BUILD_DIR)
