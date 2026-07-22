@@ -1,3 +1,6 @@
+#ifdef __WRC__
+#pragma code_page(65001) // needed to fix "Error: codepage 1252 not supported", forces UTF-8
+#endif
 #include "id.h"
 #include <winuser.h>
 #include "versioninfo.rc"
@@ -232,3 +235,4 @@ IDRC_SPC RCDATA "blank.spc"
 IDRC_SONGTEMPLATE RCDATA "SONG_DATA_BLANK_E600.bin" //"starfox_blank.spc"
 
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "ebmused.exe.manifest"
+

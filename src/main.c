@@ -27,6 +27,12 @@
 #include "ebmusv2.h"
 #include "misc.h"
 
+#ifndef LINUX
+    #define LOCALTIME(t, tm) localtime_s((tm), (t))
+#else
+    #define LOCALTIME(t, tm) localtime_r((t), (tm))
+#endif
+
 #ifdef DEBUG
 #include <fcntl.h>
 
@@ -970,7 +976,7 @@ static void write_spc(FILE *f) {
 
 			// Date dumped (MM/DD/YYYY)
 			time(&raw_time);
-			localtime_s(&time_info, &raw_time);
+			LOCALTIME(&raw_time, &time_info);
 			strftime(spc_date, sizeof(spc_date), "%m/%d/%Y", &time_info);
 			strncpy(&new_spc[0x9E],spc_date,10);
 

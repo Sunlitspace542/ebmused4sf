@@ -1,7 +1,7 @@
 all: release
 
 release:
-	$(MAKE) -C src/
+	$(MAKE) -C src/ release
 
 debug:
 	$(MAKE) -C src/ debug

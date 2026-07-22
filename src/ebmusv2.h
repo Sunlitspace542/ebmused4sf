@@ -14,6 +14,10 @@ extern int printf2(const char *format, ...);
 #define printf printf2
 #endif
 
+#ifdef LINUX
+#define _strdup strdup
+#endif
+
 // EarthBound related constants
 #define NUM_SONGS 0xBF
 #define NUM_PACKS 0xA9
