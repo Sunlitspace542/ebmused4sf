@@ -1,6 +1,8 @@
 #ifndef EBMUSV2_H
 #define EBMUSV2_H
 
+#define USE_STAR_FOX_SOUND_DRIVER // define to use actual star fox sound driver
+
 #ifdef LINUX
 #include <errno.h>
 #endif

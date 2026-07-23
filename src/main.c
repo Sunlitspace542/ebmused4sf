@@ -865,9 +865,18 @@ static void write_spc(FILE *f) {
 		};
 
 		// Move the music from wherever it was in the spc to 0x3200... (ripping out part of the program block in the process...)
+		#ifndef USE_STAR_FOX_SOUND_DRIVER
+		// EarthBound sound program stuff
 		const WORD dstMusic = 0x3100;
+		#else
+		// Star Fox sound program stuff
+		const WORD dstMusic = 0xE000;
+		#endif
 		const int music_size = compile_song(&cur_song);
+		#ifndef USE_STAR_FOX_SOUND_DRIVER
+		// EarthBound sound program stuff
 		memcpy(&spc[SPC_HEADER_SIZE + dstMusic], &spc_copy[cur_song.address], music_size);
+		#endif
 
 		// recompile so the addresses are correct...
 		cur_song.address = dstMusic;
@@ -877,12 +886,23 @@ static void write_spc(FILE *f) {
 		const WORD inst_size = NUM_INSTRUMENTS*6;
 		// Calculate buffer size needed for sample pointer table to round to nearest 0x100.
 		const WORD REMAINDER = 0x100 - ((dstMusic + music_size) & 0xFF);
+		#ifndef USE_STAR_FOX_SOUND_DRIVER
+		// EarthBound sound program stuff
 		const WORD dstSamplePointers = dstMusic + music_size + REMAINDER;
 		const WORD dstInstruments = dstSamplePointers + 0x4*NUM_INSTRUMENTS + BUFFER;
 		const WORD dstSamples = dstInstruments + inst_size + BUFFER;
+		#else
+		// Star Fox sound program stuff
+		const WORD dstSamplePointers = 0x3C00;
+		const WORD dstInstruments = 0x3D00;
+		const WORD dstSamples = 0x4000;
+		#endif
 
 		// Blank out some space (for the buffer spaces)
+		#ifndef USE_STAR_FOX_SOUND_DRIVER
+		// EarthBound sound program stuff
 		memset(&new_spc[SPC_HEADER_SIZE + dstMusic], 0, dstSamples - dstMusic);
+		#endif
 
 		// Copy music data...
 		printf("Packing music data to $%x\n", cur_song.address);
@@ -942,6 +962,8 @@ static void write_spc(FILE *f) {
 
 		// We're done copying the important stuff, now we just need to adjust some pointers in the music program.
 		{
+			#ifndef	USE_STAR_FOX_SOUND_DRIVER
+			// EarthBound sound program stuff
 			// Set pattern repeat location
 			const WORD repeat_address = dstMusic + 0x2*cur_song.repeat_pos;
 			memcpy(&new_spc[SPC_HEADER_SIZE + 0x40], &repeat_address, 2);
@@ -960,6 +982,7 @@ static void write_spc(FILE *f) {
 			// Update sample address high byte
 			new_spc[SPC_HEADER_SIZE + 0x1005D] = dstSamplePointers >> 8; // DSP
 			new_spc[SPC_HEADER_SIZE + 0x52A] = dstSamplePointers >> 8; // Loader (for good measure)
+			#endif
 
 			// Write ID666 tags
 			// Name of song
