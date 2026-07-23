@@ -9,7 +9,10 @@ To compile on Linux you need Wine and `wine64-tools` installed for `winegcc` and
 
 ## TODO/Ideas
 - Command line parameter for recompiling song data to another address maybe (useful for me!)?
-- Possibly rework SBN import dialog again?
+- (Command line?) tool to brute force starting address for song data
+- Possibly rework SBN import dialog again? (unsure)
+- Have address dialog come after file picker for song data import
+- When checking for valid instruments on SPC export, if an entry is invalid but the following entry is valid, allow it through
 
 ## Original README
 ## EarthBound Music Editor
