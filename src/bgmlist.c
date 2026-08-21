@@ -44,6 +44,8 @@ int selected_bgm = 0;
 static char bgm_num_text[32] = "BGM --:";
 
 static const struct control_desc bgm_list_controls[] = {
+	{ "Static", 10, 10, 1000, 50, "Import instruments somehow and go to the other tabs to do stuff.\nThis tab has to be here so the other tabs can update. I can't be bothered to figure out why.", 0, 0 },
+/*
 	{ "ListBox", 10, 10,300,-20, NULL, IDC_LIST, WS_BORDER | LBS_NOTIFY | WS_VSCROLL },
 
 	{ "Static", 310, 10, 90, 20, "Current ROM:", 0, SS_RIGHT },
@@ -73,6 +75,7 @@ static const struct control_desc bgm_list_controls[] = {
 	{ "Button", 560,250, 60, 20, "Search", IDC_SEARCH, 0 },
 	{ "Edit",   320,275,230, 20, NULL, IDC_TITLE, WS_BORDER | ES_AUTOHSCROLL },
 	{ "Button", 560,275, 60, 20, "Rename", IDC_TITLE_CHANGE, 0 },
+*/
 };
 static struct window_template bgm_list_template = {
 	sizeof(bgm_list_controls) / sizeof(*bgm_list_controls),
