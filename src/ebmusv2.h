@@ -2,6 +2,7 @@
 #define EBMUSV2_H
 
 //#define USE_STAR_FOX_SOUND_DRIVER // define to use actual star fox sound driver
+#define NOISE_BRR_ID 0x20 // ID of software noise BRR used by Star Fox
 
 #ifdef LINUX
 #include <errno.h>

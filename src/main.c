@@ -924,10 +924,27 @@ static void write_spc(FILE *f) {
 			WORD src, len, dst;
 		} sampleMap [NUM_INSTRUMENTS];
 		WORD offset = 0;
+		/*
 		for (unsigned int i = 0; i < NUM_INSTRUMENTS && sample_pointers[i].start < 0xFF00 && sample_pointers[i].start > 0xFF; i++)
 		{
 			const WORD src_addr = sample_pointers[i].start;
 			WORD len = sample_pointers[i].loop - sample_pointers[i].start;
+		*/
+		/*
+		Bodge for sample 0x20 being reserved by Star Fox, substitutes instrument 0x20 for 0x1F
+		this assumes we have a complete set of instruments from 0x00 - 0x1F, then 0x21-... afterward
+		This is meant for my optimized sound driver as the vanilla bins define a dummy entry, and the noise brr pointer is inserted at runtime
+		*/
+		for (unsigned int i = 0; i < NUM_INSTRUMENTS; i++)
+		{
+			unsigned int sample_index = (i == NOISE_BRR_ID) ? (NOISE_BRR_ID-1) : i;
+
+			if (sample_pointers[sample_index].start >= 0xFF00 ||
+				sample_pointers[sample_index].start <= 0xFF)
+				break;
+
+			const WORD src_addr = sample_pointers[sample_index].start;
+			WORD len = sample_pointers[sample_index].loop - sample_pointers[sample_index].start;
 			WORD dst_addr = 0;
 
 			// Find if we've already stored this sample somewhere
