@@ -748,10 +748,10 @@ static void export_starfox_bin(WORD dstMusic) {
 		// tell user where it's gonna go and how big it is
 		char binExportMsgBuf[256];
 		sprintf(binExportMsgBuf,"Exported song data BIN.\nBase address: $%04X\nSize: %d bytes", cur_song.address,music_size);
-		MessageBox2(binExportMsgBuf, "BIN Export", MB_ICONEXCLAMATION);
+		MessageBox2(binExportMsgBuf, "BIN Export", MB_ICONINFORMATION);
 	} else {
 		printf("ERROR: Cannot open output bin file \"%s\"\n", binFileName);
-		MessageBox2("Cannot open output BIN file.", "Bin export error", MB_ICONINFORMATION);
+		MessageBox2("Cannot open output BIN file.", "Bin export error", MB_ICONEXCLAMATION);
 	}
 
 	memcpy(spc, spc_copy, 0x10000);
