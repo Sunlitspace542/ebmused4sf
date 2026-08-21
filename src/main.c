@@ -716,7 +716,7 @@ static void export_starfox_bin(WORD dstMusic) {
 	// check to make sure song doesn't go over 64KB
 	if (dstMusic + music_size > 0xFFFF) {
 		printf("ERROR: Song data too big by %d bytes\n", dstMusic + music_size - 0xFFFF);
-		MessageBox2("Song data overruns 64KB. Must insert at lower memory address.", "Bin export error", MB_ICONEXCLAMATION);
+		MessageBox2("Song data overruns 64KB. Must insert at lower memory address.", "BIN export error", MB_ICONEXCLAMATION);
 		memcpy(spc, spc_copy, 0x10000);
 		free(spc_copy);
 		return;
@@ -745,9 +745,13 @@ static void export_starfox_bin(WORD dstMusic) {
 		// write output bin file and close it
 		fwrite(&spc[dstMusic], 1, music_size, fpOutput);
 		fclose(fpOutput);
+		// tell user where it's gonna go and how big it is
+		char binExportMsgBuf[256];
+		sprintf(binExportMsgBuf,"Exported song data BIN.\nBase address: $%04X\nSize: %d bytes", cur_song.address,music_size);
+		MessageBox2(binExportMsgBuf, "BIN Export", MB_ICONEXCLAMATION);
 	} else {
 		printf("ERROR: Cannot open output bin file \"%s\"\n", binFileName);
-		MessageBox2("Cannot open output BIN file.", "Bin export error", MB_ICONEXCLAMATION);
+		MessageBox2("Cannot open output BIN file.", "Bin export error", MB_ICONINFORMATION);
 	}
 
 	memcpy(spc, spc_copy, 0x10000);

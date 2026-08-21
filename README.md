@@ -15,7 +15,6 @@ To compile on Linux you need Wine and `wine64-tools` installed for `winegcc` and
 - When checking for valid instruments on SPC export, if an entry is invalid but the following entry is valid, allow it through (or just force skip sample directory index $20)
 - Rip instruments from SPC (samples, instrument config)
 - Clear instruments option?
-- Report song length when compiling a song
 
 ## Original README
 ## EarthBound Music Editor
