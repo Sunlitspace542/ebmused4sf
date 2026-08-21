@@ -661,6 +661,7 @@ static void export_sfm() {
 		printf("Song start: 0x%X\n", cur_song.address);
 		printf("Song size: %d bytes\n", music_size);
 
+		/*
 		// check to make sure song doesn't go over 64KB
 		if (dstMusic + music_size > 0xFFFF) {
 			printf("ERROR: Song data too big by %d bytes\n", dstMusic + music_size - 0xFFFF);
@@ -669,6 +670,7 @@ static void export_sfm() {
 			free(spc_copy);
 			return;
 		}
+		*/
 
 		char *sfmFileName = open_dialog(GetSaveFileName, "Star Fox Music files (*.sfm)\0*.sfm\0All Files\0*.*\0\0", "sfm", NULL, OFN_OVERWRITEPROMPT);
 		
