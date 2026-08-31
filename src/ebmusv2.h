@@ -59,9 +59,9 @@ extern HMENU hmenu, hcontextmenu;
 #define NUM_TABS 3 //4
 extern HWND tab_hwnd[NUM_TABS];
 #define hwndBGMList tab_hwnd[0]
-#define hwndInstruments tab_hwnd[0]
-#define hwndEditor tab_hwnd[1]
-//#define hwndPackList tab_hwnd[3]
+#define hwndInstruments tab_hwnd[1]
+#define hwndEditor tab_hwnd[2]
+#define hwndPackList tab_hwnd[3]
 BOOL get_original_rom(void);
 BOOL save_all_packs(void);
 void import_sbn(void);

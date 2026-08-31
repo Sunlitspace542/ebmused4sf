@@ -111,13 +111,13 @@ static const char *const tab_class[NUM_TABS] = {
 	"ebmused_bgmlist",
 	"ebmused_inst",
 	"ebmused_editor",
-//	"ebmused_packs"
+	"ebmused_packs"
 };
 static const char *const tab_name[NUM_TABS] = {
 	"Home", //"BGM Table",
 	"Instruments",
 	"Tracker",
-//	"Data Packs"
+	"Data Packs"
 };
 LRESULT CALLBACK BGMListWndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK InstrumentsWndProc(HWND, UINT, WPARAM, LPARAM);
@@ -127,7 +127,7 @@ static const WNDPROC tab_wndproc[NUM_TABS] = {
 	BGMListWndProc,
 	InstrumentsWndProc,
 	EditorWndProc,
-//	PackListWndProc,
+	PackListWndProc,
 };
 
 static char filename[MAX_PATH];
