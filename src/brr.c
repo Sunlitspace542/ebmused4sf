@@ -11,7 +11,7 @@ enum {
 };
 
 struct sample samp[128];
-WORD sample_ptr_base = 0x6C00;
+WORD sample_ptr_base = __SMPL_DIR_BASE;
 //WORD sample_ptr_base = 0x3C00;
 
 // Counts and returns the number of BRR blocks from a specific location in memory.

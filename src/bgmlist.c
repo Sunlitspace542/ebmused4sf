@@ -133,10 +133,10 @@ void load_instruments() {
 		}
 	}
 	//sample_ptr_base = 0x6C00;
-	sample_ptr_base = 0x3C00;
+	sample_ptr_base = __SMPL_DIR_BASE;
 	decode_samples(&spc[sample_ptr_base]);
 	//inst_base = 0x6E00;
-	inst_base = 0x3E00;
+	inst_base = __INST_TBL_BASE;
 	if (samp[0].data == NULL) {
 // 		song_playing = FALSE;
 		stop_playing();

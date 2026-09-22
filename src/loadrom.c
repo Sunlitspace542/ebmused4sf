@@ -207,8 +207,8 @@ void load_sbn_pack(BYTE *pack_data, int pack_size, int sample_dir_block, int sam
 	free_samples();
 	
 	// Set default addresses based on standard layout
-	sample_ptr_base = 0x3C00;
-	inst_base = 0x3D00;
+	sample_ptr_base = __SMPL_DIR_BASE;
+	inst_base = __INST_TBL_BASE;
 	
 	// Parse SBN blocks from pack_data
 	int offset = 0;

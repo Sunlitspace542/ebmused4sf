@@ -876,7 +876,7 @@ static void write_spc(FILE *f) {
 		const WORD dstMusic = 0x3100;
 		#else
 		// Star Fox sound program stuff
-		const WORD dstMusic = 0xE000;
+		const WORD dstMusic = _SF_MUSIC_BASE;
 		#endif
 		const int music_size = compile_song(&cur_song);
 		#ifndef USE_STAR_FOX_SOUND_DRIVER
@@ -899,9 +899,9 @@ static void write_spc(FILE *f) {
 		const WORD dstSamples = dstInstruments + inst_size + BUFFER;
 		#else
 		// Star Fox sound program stuff
-		const WORD dstSamplePointers = 0x3C00;
-		const WORD dstInstruments = 0x3D00;
-		const WORD dstSamples = 0x4000;
+		const WORD dstSamplePointers = _SF_SMPL_DIR_BASE;
+		const WORD dstInstruments = _SF_INST_TBL_BASE;
+		const WORD dstSamples = _SF_SMPL_DIR_BASE;
 		#endif
 
 		// Blank out some space (for the buffer spaces)

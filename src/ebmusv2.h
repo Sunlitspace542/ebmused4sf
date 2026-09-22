@@ -1,8 +1,19 @@
 #ifndef EBMUSV2_H
 #define EBMUSV2_H
 
-//#define USE_STAR_FOX_SOUND_DRIVER // define to use actual star fox sound driver
+//////
+//#define USE_STAR_FOX_SOUND_DRIVER // define to use actual star fox sound driver in SPC exports
+// Star Fox Sound Driver Addresses used if above define is active
+#define _SF_MUSIC_BASE 0xE000
+#define _SF_SMPL_DIR_BASE 0x3C00
+#define _SF_INST_TBL_BASE 0x3D00
+#define _SF_SMPL_DATA_BASE 0x4000
+//////
+
 #define NOISE_BRR_ID 0x20 // ID of software noise BRR used by Star Fox
+
+#define __SMPL_DIR_BASE 0x3C00 // sample directory base address
+#define __INST_TBL_BASE 0x3D00 // patch table base address
 
 #ifdef LINUX
 #include <errno.h>

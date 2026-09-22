@@ -5,7 +5,7 @@
 #include "id.h"
 
 BYTE spc[65536];
-int inst_base = 0x6E00;
+int inst_base = __INST_TBL_BASE;
 //int inst_base = 0x3E00;
 
 // note style tables, from 6F80
