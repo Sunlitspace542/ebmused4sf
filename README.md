@@ -7,9 +7,21 @@ Thank you to all of the contributors of Earthbound Music Editor, you have enable
 Compiles on Windows with MSYS2. (I have not tested standalone MinGW or Visual Studio.)  
 To compile on Linux you need Wine and `wine64-tools` installed for `winegcc` and `wrc`.  
 
+## Command line
+Recompile a raw `SONG_DATA` binary to a different ARAM address:
+
+```
+ebmused4sf.exe -r <input.bin> <output.bin> <original-address> <new-address>
+ebmused4sf.exe -r Corneria_E600.bin Corneria_E000.bin e600 e000
+```
+
+To attempt to brute force the starting addresss of a song, use:
+
+```
+ebmused4sf.exe -b <input.bin>
+```
+
 ## TODO/Ideas
-- Command line parameter for recompiling song data to another address maybe (useful for me!)?
-- (Command line?) tool to brute force starting address for song data
 - Possibly rework SBN import dialog again? (unsure)
 - Have address dialog come after file picker for song data import
 - Rip instruments from SPC (samples, instrument config)

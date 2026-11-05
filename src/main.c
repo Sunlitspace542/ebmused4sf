@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <errno.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <commdlg.h>
@@ -1467,11 +1468,206 @@ void import_sbn() {
 	}
 }
 
+static int parse_cli_address(const char *text, WORD *address) {
+	const char *digits = text;
+	char *end;
+	unsigned long value;
+	size_t length;
+
+	if (digits[0] == '0' && (digits[1] == 'x' || digits[1] == 'X'))
+		digits += 2;
+	length = strlen(digits);
+	if (length == 0 || length > 4)
+		return FALSE;
+
+	value = strtoul(digits, &end, 16);
+	if (end == digits || *end != '\0' || value > 0xFFFF)
+		return FALSE;
+
+	*address = (WORD)value;
+	return TRUE;
+}
+
+static int read_song_data_file(const char *filename, BYTE **data, size_t *size) {
+	FILE *file = fopen(filename, "rb");
+	long file_size;
+	BYTE *buffer;
+
+	if (!file) {
+		fprintf(stderr, "Cannot open input file \"%s\": %s\n", filename, strerror(errno));
+		return FALSE;
+	}
+	if (fseek(file, 0, SEEK_END) != 0 || (file_size = ftell(file)) <= 0
+		|| file_size > 0x10000 || fseek(file, 0, SEEK_SET) != 0) {
+		fprintf(stderr, "Invalid SONG_DATA file size or seek failure: \"%s\"\n", filename);
+		fclose(file);
+		return FALSE;
+	}
+
+	buffer = malloc((size_t)file_size);
+	if (!buffer) {
+		fprintf(stderr, "Unable to allocate memory for \"%s\"\n", filename);
+		fclose(file);
+		return FALSE;
+	}
+	if (fread(buffer, 1, (size_t)file_size, file) != (size_t)file_size) {
+		fprintf(stderr, "Error reading input file \"%s\"\n", filename);
+		free(buffer);
+		fclose(file);
+		return FALSE;
+	}
+	if (fclose(file) != 0) {
+		fprintf(stderr, "Error closing input file \"%s\"\n", filename);
+		free(buffer);
+		return FALSE;
+	}
+
+	*data = buffer;
+	*size = (size_t)file_size;
+	return TRUE;
+}
+
+static int recompile_song_data(const char *input, const char *output,
+	WORD original_address, WORD new_address) {
+	BYTE *data;
+	size_t size;
+	int compiled_size;
+	FILE *file;
+
+	if (!read_song_data_file(input, &data, &size))
+		return 1;
+	if (size > 0x10000 - (size_t)original_address) {
+		fprintf(stderr, "Input file does not fit in ARAM at $%04X\n", original_address);
+		free(data);
+		return 1;
+	}
+
+	memset(spc, 0, sizeof(spc));
+	memcpy(&spc[original_address], data, size);
+	free_song(&cur_song);
+	decomp_error = NULL;
+	decompile_song(&cur_song, original_address, 0xFFFF);
+	if (cur_song.order_length == 0 || decomp_error) {
+		fprintf(stderr, "Could not decompile SONG_DATA at $%04X: %s\n",
+			original_address, decomp_error ? decomp_error : "unknown error");
+		free(data);
+		return 1;
+	}
+
+	compiled_size = compile_song(&cur_song);
+	if (compiled_size <= 0 || compiled_size > 0x10000 - (int)new_address) {
+		fprintf(stderr, "Recompiled SONG_DATA does not fit in ARAM at $%04X\n", new_address);
+		free_song(&cur_song);
+		free(data);
+		return 1;
+	}
+
+	cur_song.address = new_address;
+	compile_song(&cur_song);
+	file = fopen(output, "wb");
+	if (!file) {
+		fprintf(stderr, "Cannot open output file \"%s\": %s\n", output, strerror(errno));
+		free_song(&cur_song);
+		free(data);
+		return 1;
+	}
+	int write_failed = fwrite(&spc[new_address], 1, (size_t)compiled_size, file) != (size_t)compiled_size;
+	if (fclose(file) != 0)
+		write_failed = TRUE;
+	if (write_failed) {
+		fprintf(stderr, "Error writing output file \"%s\"\n", output);
+		free_song(&cur_song);
+		free(data);
+		return 1;
+	}
+
+	printf("Recompiled SONG_DATA: $%04X -> $%04X (%d bytes)\n",
+		original_address, new_address, compiled_size);
+	free_song(&cur_song);
+	free(data);
+	return 0;
+}
+
+static int find_song_data_address(const char *input) {
+	BYTE *data;
+	size_t size;
+	unsigned int address;
+
+	if (!read_song_data_file(input, &data, &size))
+		return 1;
+
+	for (address = 0; address + size <= 0x10000; address++) {
+		memset(spc, 0, sizeof(spc));
+		memcpy(&spc[address], data, size);
+		free_song(&cur_song);
+		decomp_error = NULL;
+		decompile_song(&cur_song, (int)address, 0xFFFF);
+		if (cur_song.order_length > 0 && !decomp_error) {
+			printf("SONG_DATA decompiles at $%04X\n", address);
+			free_song(&cur_song);
+			free(data);
+			return 0;
+		}
+	}
+
+	fprintf(stderr, "Could not find a valid SONG_DATA starting address for \"%s\"\n", input);
+	free_song(&cur_song);
+	free(data);
+	return 1;
+}
+
+static void print_cli_usage(void) {
+	fprintf(stderr,
+		"Usage:\n"
+		"  ebmused4sf.exe -r <input.bin> <output.bin> <original-address> <new-address>\n"
+		"  ebmused4sf.exe -b <input.bin>\n"
+		"Addresses are hexadecimal, with up to 4 digits (for example: e600).\n");
+}
+
+static int run_cli(int argc, char **argv) {
+	WORD original_address, new_address;
+
+	if (argc < 2)
+		return -1;
+
+#ifndef LINUX
+	if (!AttachConsole(ATTACH_PARENT_PROCESS))
+		AllocConsole();
+	freopen("CONOUT$", "w", stdout);
+	freopen("CONOUT$", "w", stderr);
+#endif
+
+	if (strcmp(argv[1], "-r") == 0 || strcmp(argv[1], "--recompile") == 0) {
+		if (argc != 6
+			|| !parse_cli_address(argv[4], &original_address)
+			|| !parse_cli_address(argv[5], &new_address)) {
+			print_cli_usage();
+			return 2;
+		}
+		return recompile_song_data(argv[2], argv[3], original_address, new_address);
+	}
+	if (strcmp(argv[1], "-b") == 0 || strcmp(argv[1], "--bruteforce") == 0) {
+		if (argc != 3) {
+			print_cli_usage();
+			return 2;
+		}
+		return find_song_data_address(argv[2]);
+	}
+	if (argv[1][0] == '-') {
+		print_cli_usage();
+		return 2;
+	}
+	return -1;
+}
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	LPSTR lpCmdLine, int nCmdShow)
 {
 	(void)hPrevInstance;
 	(void)lpCmdLine;
+	int cli_result = run_cli(_ARGC, _ARGV);
+	if (cli_result >= 0)
+		return cli_result;
 	hinstance = hInstance;
 	WNDCLASS wc;
 	MSG msg;
