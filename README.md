@@ -15,7 +15,7 @@ ebmused4sf.exe -r <input.bin> <output.bin> <original-address> <new-address>
 ebmused4sf.exe -r Corneria_E600.bin Corneria_E000.bin e600 e000
 ```
 
-To attempt to brute force the starting addresss of a song, use:
+To attempt to brute force the starting address of a song, use:
 
 ```
 ebmused4sf.exe -b <input.bin>
